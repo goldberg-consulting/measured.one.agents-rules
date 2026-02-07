@@ -10,11 +10,32 @@ cd cursor-agents
 ./install.sh /path/to/your/project
 ```
 
-This copies agents into `.cursor/agents/` and rules into `.cursor/rules/` inside the target project.
+This copies `cursor/` into `.cursor/` inside the target project, creating the agents and rules directories.
 
-## What Gets Installed
+## Repo Structure
 
-### Agents (`.cursor/agents/`)
+```
+cursor-agents/
+├── cursor/                  ← mirrors .cursor/ in your project
+│   ├── agents/
+│   │   ├── code-reviewer.md
+│   │   ├── data-scientist.md
+│   │   ├── databricks-engineer.md
+│   │   ├── debugger.md
+│   │   └── swift-developer.md
+│   └── rules/
+│       ├── general.mdc
+│       ├── git-workflow.mdc
+│       ├── python-standards.mdc
+│       ├── security.mdc
+│       ├── sql-standards.mdc
+│       ├── swift-standards.mdc
+│       └── writing-style.mdc
+├── install.sh
+└── README.md
+```
+
+## Agents
 
 | Agent | Description |
 |-------|-------------|
@@ -24,7 +45,7 @@ This copies agents into `.cursor/agents/` and rules into `.cursor/rules/` inside
 | `code-reviewer` | Code quality, security, and project coding standards enforcement |
 | `debugger` | Root cause analysis for Python and Swift |
 
-### Rules (`.cursor/rules/`)
+## Rules
 
 | Rule | Scope | Description |
 |------|-------|-------------|

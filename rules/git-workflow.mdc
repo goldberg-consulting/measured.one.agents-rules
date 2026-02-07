@@ -1,0 +1,30 @@
+---
+description: Git commit message conventions and branch naming
+alwaysApply: true
+---
+
+# Git Workflow
+
+## Commit Messages
+
+```
+<type>: <description>
+
+<optional body explaining why>
+```
+
+Types: `feat`, `fix`, `refactor`, `docs`, `test`, `chore`, `perf`, `ci`
+
+- Imperative mood, <72 chars subject line
+- Body explains *why*, not *what* (the diff shows what)
+- One logical change per commit
+
+## Branch Names
+
+`feature/short-description`, `fix/short-description`, `refactor/short-description`
+
+## Pull Requests
+
+- Analyze full commit history, not just the latest commit
+- Use `git diff [base-branch]...HEAD` to see all changes
+- Include a test plan with checklist

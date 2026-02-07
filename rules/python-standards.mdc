@@ -1,0 +1,39 @@
+---
+description: Python coding standards — type safety, Polars-first data, structlog, ruff formatting
+globs: **/*.py
+alwaysApply: false
+---
+
+# Python Standards
+
+Target Python 3.10+. Format with `ruff` (line length 88). Lint with `ruff check`.
+
+## Type Hints
+- All function signatures: params and return types, modern syntax (`str | None`, `list[str]`)
+- Complex types get a `TypeAlias` at module level
+- `Protocol` over ABC for structural typing
+- `dataclass(frozen=True)` or Pydantic `BaseModel` for structured data, never raw dicts
+
+## Data
+- **Polars over Pandas.** Lazy evaluation (`.lazy()` → `.collect()`). Name frames descriptively, not `df`.
+- Chain operations fluently, one per line. Always `.alias()` computed columns.
+- DuckDB for complex analytical SQL. Parameterized queries only.
+- Schema validation at boundaries: check columns, types, and nulls on ingest.
+
+## Logging
+- `structlog` with structured key-value data, never `print()` in library code.
+- Static message templates: `logger.info("claims_processed", count=len(claims))` not f-strings.
+
+## Error Handling
+- Specific exceptions inheriting from a package-level base. Never bare `except:`.
+- Error messages include context: `f"Claim {claim_id}: service_date {date} precedes enrollment {start}"`
+- Do not catch exceptions you cannot meaningfully handle.
+
+## Modules
+- `pathlib.Path` over `os.path`. Context managers for resources. Generators for lazy pipelines.
+- `from __future__ import annotations` when needed. `__all__` in every `__init__.py`.
+- Google-style docstrings on public APIs. No echo docstrings. No section-label comments.
+
+## Testing
+- `pytest` only. Test names describe behavior. Factory functions over fixture dicts.
+- `polars.testing.assert_frame_equal` for frame assertions. `pytest.approx` for floats.

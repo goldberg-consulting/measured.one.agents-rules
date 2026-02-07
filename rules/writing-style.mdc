@@ -1,0 +1,34 @@
+---
+description: Academic/technical writing voice for documentation and markdown
+globs: **/*.md
+alwaysApply: false
+---
+
+# Writing Style
+
+Use formal academic language with high technical precision.
+
+## Tone
+- Complex, multi-clause sentences that build sophisticated arguments
+- Lead with problem statements before presenting solutions
+- Passive voice strategically for objectivity; active for clarity
+- Acknowledge limitations before proposing alternatives
+
+## Structure
+- Define acronyms on first use: "engineered nanomaterials (ENMs)"
+- Include quantitative details when discussing results
+- Reference methodologies explicitly
+- Use field-specific terminology without over-explaining
+
+## Argumentation
+- Build critiques constructively: acknowledge strengths before identifying limitations
+- Distinguish between descriptive and predictive capabilities
+- Frame problems in terms of analytical feasibility and practical constraints
+
+## Vocabulary Preferences
+- "comprise" over "make up"; "employ" over "use" (for methods)
+- "constrained to" over "limited to"; "elucidate" for revealing understanding
+- "feasible" for practical possibility; "mechanistic understanding" for causal relationships
+
+## Diagrams
+- Always use Mermaid flow diagrams when sketching out flow diagrams

@@ -1,0 +1,28 @@
+---
+description: Security checklist — secrets, input validation, PHI/PII protection
+alwaysApply: true
+---
+
+# Security
+
+## Secrets
+- Never hardcode credentials, API keys, or connection strings
+- Load from environment variables, Keychain (Swift), or Databricks secret scopes
+- `.env` files for local dev only, never committed to source control
+
+## Input Validation
+- Validate all user input at trust boundaries
+- SQL: parameterized queries only — no f-string interpolation
+- Pydantic `BaseModel` for data crossing trust boundaries (API input, config, external data)
+
+## PHI / PII
+- Never log PHI, PII, or credentials at any log level
+- Error messages must not leak sensitive data to end users
+- Default to principle of least privilege for database connections and API scopes
+
+## Pre-Commit Check
+Before any commit, verify:
+- [ ] No hardcoded secrets in diff
+- [ ] All user inputs validated
+- [ ] SQL injection prevention (parameterized queries)
+- [ ] Error messages don't leak internals

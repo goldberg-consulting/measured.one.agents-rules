@@ -1,0 +1,32 @@
+---
+description: SQL coding standards — CTEs, aliasing, parameterized queries
+globs: **/*.sql
+alwaysApply: false
+---
+
+# SQL Standards
+
+## Style
+- Lowercase keywords (`select`, `from`, `where`), trailing commas
+- CTEs over subqueries for readability; name each CTE descriptively
+- Alias all computed columns explicitly — never rely on auto-generated names
+- One join/filter per line for readability
+
+## Safety
+- Parameterized queries only — never interpolate variables into SQL strings
+- Use `COALESCE` and `NULLIF` deliberately; document NULL semantics in comments
+- Prefer `QUALIFY` with window functions over wrapping in subqueries (when dialect supports it)
+
+## Performance
+- Filter early: push `WHERE` clauses as close to base tables as possible
+- Use `EXISTS` over `COUNT(*)` for existence checks
+- Avoid `SELECT *` — list columns explicitly
+- Partition and cluster tables on high-cardinality filter columns
+
+## DBT-Specific (when in a DBT project)
+- Staging models: rename, cast, and apply naming conventions only
+- Intermediate models: business logic joins and transformations
+- Mart models: final consumer-facing tables
+- Every model has a `schema.yml` entry with tests and documentation
+- Use `{{ ref('model') }}` for all inter-model references
+- Jinja macros for repeated logic; keep SQL readable after rendering

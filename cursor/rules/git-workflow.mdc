@@ -1,5 +1,5 @@
 ---
-description: Git commit message conventions and branch naming
+description: Git commit message conventions, branch naming, and PR standards
 alwaysApply: true
 ---
 
@@ -15,16 +15,17 @@ alwaysApply: true
 
 Types: `feat`, `fix`, `refactor`, `docs`, `test`, `chore`, `perf`, `ci`
 
-- Imperative mood, <72 chars subject line
-- Body explains *why*, not *what* (the diff shows what)
-- One logical change per commit
+- Imperative mood, under 72 characters for the subject line.
+- Body explains *why*, not *what*. The diff shows what.
+- One logical change per commit. Do not bundle unrelated changes.
+- No emdashes in commit messages.
 
 ## Branch Names
 
 `feature/short-description`, `fix/short-description`, `refactor/short-description`
 
 ## Pull Requests
-
-- Analyze full commit history, not just the latest commit
-- Use `git diff [base-branch]...HEAD` to see all changes
-- Include a test plan with checklist
+- Analyze full commit history with `git diff [base-branch]...HEAD`, not just the latest commit.
+- Summary: 1-3 bullet points describing what changed and why.
+- Include a test plan with specific checklist items.
+- Every PR that changes behavior must include corresponding test changes.

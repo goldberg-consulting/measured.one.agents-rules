@@ -1,28 +1,32 @@
 ---
-description: Security checklist — secrets, input validation, PHI/PII protection
+description: Security checklist for secrets, input validation, and PHI/PII protection
 alwaysApply: true
 ---
 
 # Security
 
 ## Secrets
-- Never hardcode credentials, API keys, or connection strings
-- Load from environment variables, Keychain (Swift), or Databricks secret scopes
-- `.env` files for local dev only, never committed to source control
+- Never hardcode credentials, API keys, or connection strings in source code.
+- Load from environment variables, Keychain (Swift), or Databricks secret scopes.
+- `.env` files for local development only. Never committed to source control.
+- Rotate any secret that has been committed, even briefly.
 
 ## Input Validation
-- Validate all user input at trust boundaries
-- SQL: parameterized queries only — no f-string interpolation
-- Pydantic `BaseModel` for data crossing trust boundaries (API input, config, external data)
+- Validate all user input at trust boundaries. Do not trust data from external sources.
+- SQL: parameterized queries only. No f-string interpolation, no string concatenation.
+- Pydantic `BaseModel` for data crossing trust boundaries (API input, config files, external data).
+- Swift: validate `Codable` decoding results before use. Handle decoding failures explicitly.
 
 ## PHI / PII
-- Never log PHI, PII, or credentials at any log level
-- Error messages must not leak sensitive data to end users
-- Default to principle of least privilege for database connections and API scopes
+- Never log PHI, PII, or credentials at any log level, including DEBUG.
+- Error messages returned to users must not leak internal state, stack traces, or database details.
+- Default to principle of least privilege for database connections and API scopes.
+- Anonymize or hash identifiers in log output: `logger.info("processing", patient_hash=hash(pid))`.
 
 ## Pre-Commit Check
 Before any commit, verify:
-- [ ] No hardcoded secrets in diff
-- [ ] All user inputs validated
-- [ ] SQL injection prevention (parameterized queries)
-- [ ] Error messages don't leak internals
+- [ ] No hardcoded secrets in the diff (`git diff` and `git diff --cached`)
+- [ ] All user inputs validated at the boundary
+- [ ] SQL uses parameterized queries, no string interpolation
+- [ ] Error messages do not leak internals or sensitive data
+- [ ] No PHI/PII in log statements

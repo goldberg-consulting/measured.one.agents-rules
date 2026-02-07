@@ -1,5 +1,5 @@
 ---
-description: SQL coding standards — CTEs, aliasing, parameterized queries
+description: SQL coding standards for CTEs, aliasing, parameterized queries, testing, and DBT conventions
 globs: **/*.sql
 alwaysApply: false
 ---
@@ -7,26 +7,36 @@ alwaysApply: false
 # SQL Standards
 
 ## Style
-- Lowercase keywords (`select`, `from`, `where`), trailing commas
-- CTEs over subqueries for readability; name each CTE descriptively
-- Alias all computed columns explicitly — never rely on auto-generated names
-- One join/filter per line for readability
+- Lowercase keywords (`select`, `from`, `where`), trailing commas.
+- CTEs over subqueries for readability. Name each CTE descriptively.
+- Alias all computed columns explicitly. Never rely on auto-generated names.
+- One join or filter condition per line.
 
 ## Safety
-- Parameterized queries only — never interpolate variables into SQL strings
-- Use `COALESCE` and `NULLIF` deliberately; document NULL semantics in comments
-- Prefer `QUALIFY` with window functions over wrapping in subqueries (when dialect supports it)
+- Parameterized queries only. Never interpolate variables into SQL strings.
+- Use `COALESCE` and `NULLIF` deliberately. Document NULL semantics in a comment when the behavior is non-obvious.
+- Prefer `QUALIFY` with window functions over wrapping in subqueries (when the dialect supports it).
 
 ## Performance
-- Filter early: push `WHERE` clauses as close to base tables as possible
-- Use `EXISTS` over `COUNT(*)` for existence checks
-- Avoid `SELECT *` — list columns explicitly
-- Partition and cluster tables on high-cardinality filter columns
+- Filter early: push `WHERE` clauses as close to base tables as possible.
+- Use `EXISTS` over `COUNT(*)` for existence checks.
+- Avoid `SELECT *`. List columns explicitly.
+- Partition and cluster tables on high-cardinality filter columns.
+
+## Testing and Validation
+- Every query that produces a result set used downstream must have at least one assertion on row count, schema, or key uniqueness.
+- Test for NULLs in join keys before joining. A NULL join key silently drops rows.
+- Validate grain: confirm that the output has one row per expected entity before handing off.
+
+## Documentation
+- Each CTE gets a one-line comment explaining its purpose if the name alone is not sufficient.
+- Complex WHERE clauses get a comment explaining the business rule.
+- Computed columns that encode domain logic (e.g., risk tiers, date windows) get a comment citing the source requirement.
 
 ## DBT-Specific (when in a DBT project)
-- Staging models: rename, cast, and apply naming conventions only
-- Intermediate models: business logic joins and transformations
-- Mart models: final consumer-facing tables
-- Every model has a `schema.yml` entry with tests and documentation
-- Use `{{ ref('model') }}` for all inter-model references
-- Jinja macros for repeated logic; keep SQL readable after rendering
+- Staging models: rename, cast, and apply naming conventions only.
+- Intermediate models: business logic joins and transformations.
+- Mart models: final consumer-facing tables.
+- Every model has a `schema.yml` entry with at least `unique`, `not_null` tests on primary keys, and a description.
+- Use `{{ ref('model') }}` for all inter-model references.
+- Jinja macros for repeated logic. Keep SQL readable after rendering.

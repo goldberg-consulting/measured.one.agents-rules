@@ -1,5 +1,5 @@
 ---
-description: Swift and SwiftUI coding standards — concurrency, value types, accessibility
+description: Swift and SwiftUI coding standards for concurrency, value types, testing, and accessibility
 globs: **/*.swift
 alwaysApply: false
 ---
@@ -9,32 +9,40 @@ alwaysApply: false
 Target Swift 5.9+. Enforce with SwiftLint.
 
 ## Architecture
-- MVVM with SwiftUI: View observes ViewModel, ViewModel owns business logic
-- Prefer value types (`struct`, `enum`) over reference types
-- Protocol composition over class inheritance
-- Dependency injection through initializer or `@Environment`
-- Split files at ~300 lines
+- MVVM with SwiftUI: View observes ViewModel, ViewModel owns business logic.
+- Prefer value types (`struct`, `enum`) over reference types.
+- Protocol composition over class inheritance.
+- Dependency injection through initializer or `@Environment`.
+- Split files at approximately 300 lines.
 
 ## Concurrency
-- `async`/`await` for all asynchronous work — no `DispatchQueue` in new code
-- `@MainActor` for UI-bound code; actors for shared mutable state
-- `Sendable` compliance throughout; handle `Task.checkCancellation()`
-- `TaskGroup` for structured parallel work
+- `async`/`await` for all asynchronous work. No `DispatchQueue` in new code.
+- `@MainActor` for UI-bound code. Actors for shared mutable state.
+- `Sendable` compliance throughout. Handle `Task.checkCancellation()`.
+- `TaskGroup` for structured parallel work.
 
 ## SwiftUI
-- Small, focused view structs; extract `ViewModifier` for reuse
-- `@Observable` macro (iOS 17+) for modern observation
-- `NavigationStack` with programmatic navigation paths
-- Accessibility: labels, traits, VoiceOver on every interactive element
-- Dark mode and Dynamic Type support
+- Small, focused view structs. Extract `ViewModifier` for reuse.
+- `@Observable` macro (iOS 17+) for modern observation.
+- `NavigationStack` with programmatic navigation paths.
+- Accessibility: labels, traits, and VoiceOver support on every interactive element.
+- Dark mode and Dynamic Type support required on all screens.
 
 ## Safety
-- No force unwraps (`!`) except in tests with a comment explaining why
-- `[weak self]` in closures that outlive their owner
-- `Codable` with explicit `CodingKeys` when API shapes differ from model
-- Keychain for secrets; never hardcode API keys
+- No force unwraps (`!`) except in tests with a comment explaining the invariant.
+- `[weak self]` in closures that outlive their owner.
+- `Codable` with explicit `CodingKeys` when API shapes differ from the model.
+- Keychain for secrets. Never hardcode API keys.
+
+## Documentation
+- Public types and methods require a doc comment describing behavior and contracts.
+- One-liner doc comments are preferred for simple functions: `/// Clamp value to [lo, hi].`
+- Do not restate parameter types in prose. Describe what the function does, not its signature.
 
 ## Testing
-- XCTest with async test methods
-- Mock via protocols, not concrete classes
-- `test_<behavior>_when_<condition>_expects_<result>` naming
+- XCTest with async test methods.
+- Mock via protocols, not concrete classes. Inject dependencies; do not construct them internally.
+- Snapshot testing for view regression on key screens.
+- UI testing with `XCUIApplication` for critical user flows.
+- Test naming: `test_<behavior>_when_<condition>_expects_<result>`.
+- Minimum 80% coverage on business logic. Do not write tests for trivial getters.

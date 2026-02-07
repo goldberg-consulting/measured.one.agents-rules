@@ -1,31 +1,38 @@
 ---
-description: Core behavior rules — scope discipline, no LLM tells, surgical edits
+description: Core behavior rules for scope discipline, anti-LLM patterns, and self-verification
 alwaysApply: true
 ---
 
 # General Rules
 
 ## Scope Discipline
-- Touch only what you're asked to touch
-- Preserve existing patterns — match the idioms already present
-- Do not regenerate entire files for small changes; edit surgically
-- No drive-by refactors, bonus helpers, or opportunistic TODOs
-- Ask before making architectural changes
+- Touch only what you are asked to touch.
+- Preserve existing patterns. Match the idioms already present in the codebase.
+- Do not regenerate entire files for small changes. Edit surgically.
+- No drive-by refactors, bonus helpers, or opportunistic TODOs.
+- Ask before making architectural changes.
 
-## No LLM Tells
+## No Emdashes
+Never use emdashes in code comments, docstrings, commit messages, or prose output. Use commas, semicolons, colons, or separate sentences.
+
+## No AI Tropes
+Never use: "delve", "dive into", "landscape" (metaphorical), "leverage", "utilize", "it's important to note", "robust" (unquantified), "seamless", "streamline", "foster", "bolster", "cutting-edge", "groundbreaking", "comprehensive guide", "Let's [verb]" in formal output. These are tells of LLM-generated text.
+
+## No LLM Code Tells
 Avoid these patterns that betray AI authorship:
 
-**Structural**: No "just in case" imports. No symmetrical exhaustiveness. No flat function lists without organization. No cargo-culted error handling.
+**Structural**: No "just in case" imports. No symmetrical exhaustiveness (handling every conceivable edge case with equal weight). No flat function lists without organizing structure. No cargo-culted error handling (wrapping everything in try/except when the caller handles it better). No classes with `__init__` and a single `run()` method; that is a function.
 
-**Naming**: No over-qualified names (`filtered_claims_dataframe` → `claims`). No thesaurus naming (pick one verb and use it). No narrating the obvious (`data_to_process` → name what it represents).
+**Naming**: No over-qualified names (`filtered_claims_dataframe` is `claims`). No thesaurus naming (pick one verb for one operation across the codebase). No narrating the obvious (`data_to_process` should name what it represents).
 
-**Comments**: No section-label comments (`# --- Data Loading ---`). No echo docstrings that restate the signature. No apologetic comments (`# Simplified for now`). No changelog comments.
+**Comments**: No section-label comments (`# --- Data Loading ---`). No echo docstrings that restate the function signature. No apologetic comments (`# Simplified for now`, `# This could be optimized`). No changelog comments (`# Added error handling`).
 
-**Logic**: No `if flag == True`. No `if len(items) > 0` (use `if items`). No re-validation of conditions guaranteed by callers. No classes with one method — use a function.
+**Logic**: No `if flag == True`. No `if len(items) > 0` (use `if items`). No re-validation of conditions already guaranteed by the caller's contract. No redundant `is not None` checks on values that cannot be None by type.
 
 ## Self-Verification
 Before presenting code, silently verify:
-1. No syntax errors, undefined names, or missing imports
-2. Type annotations consistent; no unused imports or variables
-3. No names hallucinated from nonexistent libraries
-4. Nothing changed that wasn't asked for
+1. No syntax errors, undefined names, or missing imports.
+2. Type annotations consistent. No unused imports or variables.
+3. No names hallucinated from nonexistent libraries.
+4. Nothing changed that was not asked for.
+5. An experienced developer reading this would think a human wrote it.

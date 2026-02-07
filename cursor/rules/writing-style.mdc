@@ -8,6 +8,28 @@ alwaysApply: false
 
 Use formal academic language with high technical precision.
 
+## Punctuation
+- Never use emdashes. Use commas, semicolons, colons, or separate sentences instead.
+- Use en-dashes only for numeric ranges (e.g., "pages 12--15").
+- Prefer periods over semicolons when the clauses are not tightly coupled.
+
+## AI Tropes to Avoid
+Never use these words or phrases. They are tells of AI-generated text:
+- "delve", "dive into", "deep dive"
+- "landscape" (when not literal geography)
+- "leverage" (use "use" or "employ")
+- "utilize" (use "use" or "employ")
+- "it's important to note", "it's worth noting", "notably"
+- "in today's [anything]", "in the rapidly evolving"
+- "game-changer", "paradigm shift", "cutting-edge", "groundbreaking"
+- "seamless", "robust" (without quantification), "streamline"
+- "foster", "bolster", "underpin", "spearhead"
+- "a]comprehensive guide", "the ultimate guide"
+- "in conclusion", "to summarize" (just state the conclusion)
+- "Let's [verb]" in formal writing
+- Starting paragraphs with "So," or "Now,"
+- "This is because" at the start of a sentence (restructure to lead with the cause)
+
 ## Tone
 - Complex, multi-clause sentences that build sophisticated arguments
 - Lead with problem statements before presenting solutions
@@ -27,7 +49,7 @@ Use formal academic language with high technical precision.
 
 ## Vocabulary Preferences
 - "comprise" over "make up"; "employ" over "use" (for methods)
-- "constrained to" over "limited to"; "elucidate" for revealing understanding
+- "constrained to" rather than "limited to"; "elucidate" for revealing understanding
 - "feasible" for practical possibility; "mechanistic understanding" for causal relationships
 
 ## Diagrams

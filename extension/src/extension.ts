@@ -148,6 +148,65 @@ async function installScaffoldingCommand(): Promise<void> {
   );
 }
 
+async function updateFromRepoCommand(): Promise<void> {
+  const workspaceRoot = getWorkspaceRoot();
+  if (!workspaceRoot) {
+    vscode.window.showErrorMessage(
+      "Open a workspace folder before updating agents."
+    );
+    return;
+  }
+
+  const repos = getRepositories();
+  if (repos.length === 0) {
+    vscode.window.showInformationMessage(
+      "No repositories configured. Add one with 'Cursor Agents: Manage Repositories'."
+    );
+    return;
+  }
+
+  const items = toQuickPickItems(repos);
+  const selected = await vscode.window.showQuickPick(items, {
+    placeHolder: "Select a repository to update from",
+    title: "Update Cursor Agents from Repository",
+  });
+
+  if (!selected) {
+    return;
+  }
+
+  const url = selected.description!;
+
+  await vscode.window.withProgress(
+    {
+      location: vscode.ProgressLocation.Notification,
+      title: "Cursor Agents – Updating",
+      cancellable: false,
+    },
+    async (progress) => {
+      let tmpDir: string | undefined;
+      try {
+        tmpDir = await cloneRepo(url, progress);
+        const result = await installFromDirectory(
+          tmpDir,
+          workspaceRoot,
+          "overwriteAll",
+          progress
+        );
+        const msg = formatResult(result);
+        vscode.window.showInformationMessage(`Updated: ${msg}`);
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        vscode.window.showErrorMessage(`Update failed: ${msg}`);
+      } finally {
+        if (tmpDir) {
+          await cleanup(tmpDir);
+        }
+      }
+    }
+  );
+}
+
 async function manageReposCommand(): Promise<void> {
   const action = await vscode.window.showQuickPick(
     [
@@ -240,6 +299,10 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand(
       "cursorAgents.installScaffolding",
       installScaffoldingCommand
+    ),
+    vscode.commands.registerCommand(
+      "cursorAgents.updateFromRepo",
+      updateFromRepoCommand
     ),
     vscode.commands.registerCommand(
       "cursorAgents.manageRepos",

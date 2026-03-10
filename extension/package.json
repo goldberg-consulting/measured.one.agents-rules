@@ -1,0 +1,78 @@
+{
+  "name": "cursor-agents-installer",
+  "displayName": "Cursor Agents Installer",
+  "description": "Install AI agents, rules, and skills into your workspace from git repositories.",
+  "version": "0.1.0",
+  "publisher": "measured-one",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "cursorAgents.installFromRepo",
+        "title": "Cursor Agents: Install from Repository"
+      },
+      {
+        "command": "cursorAgents.installScaffolding",
+        "title": "Cursor Agents: Install Scaffolding"
+      },
+      {
+        "command": "cursorAgents.manageRepos",
+        "title": "Cursor Agents: Manage Repositories"
+      }
+    ],
+    "configuration": {
+      "title": "Cursor Agents",
+      "properties": {
+        "cursorAgents.repositories": {
+          "type": "array",
+          "default": [
+            {
+              "name": "measured.one defaults",
+              "url": "https://github.com/goldberg-consulting/measured.one.agents-rules.git",
+              "description": "Curated agents, rules, and skills for Python, Swift, SQL, and data engineering"
+            }
+          ],
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Display name for this repository"
+              },
+              "url": {
+                "type": "string",
+                "description": "Git clone URL (HTTPS or SSH)"
+              },
+              "description": {
+                "type": "string",
+                "description": "Short description of what this repo contains"
+              }
+            },
+            "required": ["name", "url"]
+          },
+          "description": "Registry of git repositories containing Cursor agents, rules, and skills."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run build",
+    "build": "node esbuild.js --production",
+    "watch": "node esbuild.js --watch",
+    "lint": "tsc --noEmit",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.85.0",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.5.0"
+  }
+}

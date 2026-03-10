@@ -22,6 +22,7 @@ cursor-agents/
 │   │   ├── data-scientist.md
 │   │   ├── databricks-engineer.md
 │   │   ├── debugger.md
+│   │   ├── scientific-writer.md
 │   │   └── swift-developer.md
 │   └── rules/
 │       ├── general.mdc
@@ -44,6 +45,7 @@ cursor-agents/
 | `swift-developer` | SwiftUI, structured concurrency, protocol-oriented design, iOS/macOS |
 | `code-reviewer` | Code quality, security, and project coding standards enforcement |
 | `debugger` | Root cause analysis for Python and Swift |
+| `scientific-writer` | Academic/technical prose, papers, white papers, figure captions, abstracts |
 
 ## Rules
 

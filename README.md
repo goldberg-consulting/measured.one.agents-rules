@@ -1,11 +1,11 @@
 # Cursor Agents & Rules
 
-Shared Cursor configuration for Goldberg Consulting projects.
+Shared Cursor agents, rules, and skills for consistent AI-assisted development.
 
 ## Quick Install
 
 ```bash
-git clone git@github.com:goldberg-consulting/cursor-agents.git
+git clone <repo-url>
 cd cursor-agents
 ./install.sh /path/to/your/project
 ```
@@ -41,7 +41,7 @@ cursor-agents/
 | Agent | Description |
 |-------|-------------|
 | `databricks-engineer` | PySpark, Spark SQL, DBT, Databricks CLI, Delta Lake, Unity Catalog |
-| `data-scientist` | Polars, DuckDB, scikit-learn, statistical modeling, healthcare analytics |
+| `data-scientist` | Polars, DuckDB, scikit-learn, statistical modeling, exploratory analysis |
 | `swift-developer` | SwiftUI, structured concurrency, protocol-oriented design, iOS/macOS |
 | `code-reviewer` | Code quality, security, and project coding standards enforcement |
 | `debugger` | Root cause analysis for Python and Swift |

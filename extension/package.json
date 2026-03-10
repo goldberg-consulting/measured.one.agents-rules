@@ -25,6 +25,10 @@
       {
         "command": "cursorAgents.manageRepos",
         "title": "Cursor Agents: Manage Repositories"
+      },
+      {
+        "command": "cursorAgents.updateFromRepo",
+        "title": "Cursor Agents: Update from Repository"
       }
     ],
     "configuration": {
@@ -37,6 +41,11 @@
               "name": "measured.one defaults",
               "url": "https://github.com/goldberg-consulting/measured.one.agents-rules.git",
               "description": "Curated agents, rules, and skills for Python, Swift, SQL, and data engineering"
+            },
+            {
+              "name": "Anthropic skills",
+              "url": "https://github.com/anthropics/skills.git",
+              "description": "Official Anthropic skills: PDF, DOCX, XLSX, MCP builder, webapp testing, and more"
             }
           ],
           "items": {

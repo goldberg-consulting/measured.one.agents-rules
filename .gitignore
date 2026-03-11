@@ -1,0 +1,38 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+*.egg
+.venv/
+venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
+# Node
+node_modules/
+
+# Extension build artifacts
+extension/dist/
+extension/*.vsix
+
+# Environment
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+.cursor/
+
+# DuckDB
+*.duckdb.wal
+ReferenceData/reference.duckdb

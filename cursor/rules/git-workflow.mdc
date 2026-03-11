@@ -1,9 +1,105 @@
 ---
-description: Git commit message conventions, branch naming, and PR standards
+description: Git workflow, branch hygiene, pre-commit enforcement, and PR standards
 alwaysApply: true
 ---
 
 # Git Workflow
+
+## Workflow: Issue, Branch, Work, PR, Merge
+
+Every change follows this sequence. No exceptions for "quick fixes."
+
+1. **Issue first.** Create a GitHub issue describing the problem or feature. If the change is trivial (typo, one-liner), the PR description substitutes for an issue, but preference is always issue-first.
+2. **Branch from main.** Create a branch from `upstream/main` (or `origin/main` if no upstream). Name it per the branch naming convention below.
+3. **Work on the branch.** Commit early, commit often. Each commit is one logical change.
+4. **Run pre-commit before pushing.** `pre-commit run --all-files` must pass. Do not skip hooks with `--no-verify`.
+5. **Push and open a PR.** PRs target `main`. Link the issue with `Closes #N`. Request at least one reviewer.
+6. **Address review feedback.** New commits, not force-pushes, so reviewers can see incremental changes.
+7. **Merge.** Squash-merge or regular merge per team preference. Delete the branch after merge.
+
+## Never Commit
+
+These paths must never appear in a commit. If they are already tracked, remove them with `git rm -r --cached` and add to `.gitignore`.
+
+| Path | Reason |
+|------|--------|
+| `.cursor/` | Per-developer IDE config. Rules, agents, MCP settings. Not shared via git. |
+| `.env` | Credentials and secrets. Local-only. |
+| `variable-overrides.json` | Personal Databricks compute IDs. |
+| `*.parquet`, `*.csv` (generated) | Pipeline output. Reproducible from source. |
+| `data/` | Local data directory. |
+| `scratch/` | Personal notes and experiments. |
+| `.DS_Store` | macOS filesystem metadata. |
+
+Before every commit, verify:
+
+```
+git diff --cached --name-only | grep -E '^\.(cursor|env)|variable-overrides|\.parquet$'
+```
+
+If that returns anything, unstage it.
+
+## Pre-Commit Hooks
+
+This repo uses pre-commit as the primary quality gate.
+
+### Setup
+
+```bash
+pip install pre-commit   # or: uv pip install pre-commit
+pre-commit install       # installs hooks into .git/hooks
+```
+
+### What Runs
+
+| Hook | Purpose |
+|------|---------|
+| `trailing-whitespace` | Strip trailing whitespace |
+| `end-of-file-fixer` | Ensure files end with newline |
+| `check-yaml`, `check-json` | Syntax validation |
+| `check-added-large-files` | Block files > 1MB |
+| `check-merge-conflict` | Catch unresolved conflict markers |
+| `detect-private-key` | Block private key files |
+| `no-commit-to-branch` | Block direct commits to `main` |
+| `ruff` | Python linting (with `--fix`) |
+| `ruff-format` | Python formatting (replaces black) |
+| `mypy` | Type checking |
+| `detect-secrets` | Secrets scanning against baseline |
+| `markdownlint` | Markdown formatting |
+| `sqlfluff-lint` | SQL linting (manual stage, run explicitly) |
+
+### Enforcement
+
+- Run `pre-commit run --all-files` before opening a PR. This is not optional.
+- If a hook fails, fix the issue. Do not bypass with `--no-verify`.
+- If ruff auto-fixes files, stage the fixes and re-run. The `--exit-non-zero-on-fix` flag ensures auto-fixes are caught.
+- If detect-secrets flags a false positive, update `.secrets.baseline` with `detect-secrets scan > .secrets.baseline` and commit the updated baseline.
+
+### Ruff Configuration
+
+Ruff config lives in `pyproject.toml` under `[tool.ruff]`. Key rules enabled:
+
+- **E/W**: pycodestyle
+- **F**: Pyflakes
+- **I**: isort (import sorting)
+- **B**: flake8-bugbear
+- **UP**: pyupgrade
+- **S**: bandit (security)
+- **SIM**: flake8-simplify
+
+Line length is 88. The formatter handles wrapping; do not manually break lines to satisfy E501.
+
+## Branch Names
+
+```
+feature/short-description
+fix/short-description
+refactor/short-description
+docs/short-description
+chore/short-description
+```
+
+Match the branch prefix to the commit type. Lowercase, hyphens only, no slashes beyond the prefix.
 
 ## Commit Messages
 
@@ -15,17 +111,65 @@ alwaysApply: true
 
 Types: `feat`, `fix`, `refactor`, `docs`, `test`, `chore`, `perf`, `ci`
 
-- Imperative mood, under 72 characters for the subject line.
+- Imperative mood ("add X", not "added X"), under 72 characters for the subject line.
 - Body explains *why*, not *what*. The diff shows what.
 - One logical change per commit. Do not bundle unrelated changes.
 - No emdashes in commit messages.
-
-## Branch Names
-
-`feature/short-description`, `fix/short-description`, `refactor/short-description`
+- Reference the issue number in the body when relevant: `Part of #42`.
 
 ## Pull Requests
+
+### Before Opening
+
+- [ ] `pre-commit run --all-files` passes
+- [ ] `git diff --cached --name-only` shows no forbidden paths
+- [ ] Branch is up to date with `main` (rebase or merge)
+- [ ] Commit history is clean (no "WIP", no "fix typo" chains that should be squashed)
+
+### PR Content
+
+- **Title**: Same format as commit messages (`type: description`).
+- **Body**: Use the template:
+
+```markdown
+## Summary
+- 1-3 bullet points: what changed and why.
+
+Closes #<issue-number>
+
+## Test plan
+- [ ] Specific verification steps
+- [ ] Pre-commit hooks pass
+- [ ] Relevant tests updated or added
+```
+
 - Analyze full commit history with `git diff [base-branch]...HEAD`, not just the latest commit.
-- Summary: 1-3 bullet points describing what changed and why.
-- Include a test plan with specific checklist items.
 - Every PR that changes behavior must include corresponding test changes.
+- Request at least one reviewer. Route to the appropriate reviewer per agent-routing rules.
+
+### Review Protocol
+
+- Reviewers check for: correctness, security (no secrets, no PHI in logs, parameterized SQL), test coverage, and adherence to repo conventions.
+- Address all CRITICAL findings before merge. WARNINGS should be addressed or explicitly deferred with rationale.
+- New commits to address feedback, not amended commits, so the review trail is preserved.
+
+## Remotes
+
+| Remote | Purpose |
+|--------|---------|
+| `upstream` | The canonical repo (if you maintain a fork). PRs target this. |
+| `origin` | Your fork or working copy. Push branches here if you lack upstream write access. |
+
+Fetch upstream regularly: `git fetch upstream`. Rebase or merge `upstream/main` into your branch before opening a PR.
+
+## Agent Responsibilities
+
+When the AI agent performs git operations, it must:
+
+1. **Never** run `git push --force` unless the user explicitly requests it and the target is not `main`.
+2. **Never** commit files matching the "Never Commit" list above.
+3. **Never** skip pre-commit hooks.
+4. **Always** check `git diff --cached` before committing to verify no secrets, credentials, or forbidden paths are staged.
+5. **Always** link PRs to issues when an issue exists.
+6. **Always** request a reviewer when creating a PR.
+7. **Warn** the user if a branch has diverged significantly from `main` (>20 commits behind).

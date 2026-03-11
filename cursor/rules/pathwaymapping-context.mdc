@@ -1,0 +1,45 @@
+---
+alwaysApply: true
+description: PathwayMapping planning and architecture context
+---
+# PathwayMapping Context
+
+Use these files as the primary context for planning and implementation:
+
+- [README.md](mdc:README.md)
+- [ARCHITECTURE.md](mdc:docs/ARCHITECTURE.md)
+- [PLANNING_MODE.md](mdc:docs/PLANNING_MODE.md)
+- [INTRA_MODE_SPEC.md](mdc:docs/INTRA_MODE_SPEC.md)
+- [PILOT_RUN_LOG.md](mdc:docs/PILOT_RUN_LOG.md)
+- [cursorinstructions.md](mdc:cursorinstructions.md)
+
+## Guardrails
+
+- Keep shared logic in `src/` and condition-specific logic in `pipelines/<condition>/`.
+- Prefer dynamic, condition-agnostic abstractions over one-off condition code.
+- In the current phase, prioritize `single_source` intra-mode before benchmark compare mode.
+- Parameterize pathway mode, index definition, relative windowing, and normalization rules.
+- Maintain strict visualization consistency and explicit visual QA checks.
+- Require cluster quality and stability metrics as go/no-go gates.
+- Treat external agents as optional augmentation layers with deterministic fallback.
+- Require schema-validated, provenance-tagged, human-reviewed agent outputs for user-facing content.
+- Update `cursorinstructions.md` after major planning or architecture decisions.
+
+## Clustering Standards
+
+- Clustering must use individual one-hot encoded features (LANE|FEATURE|month triples), not aggregated utilization metrics.
+- **Dimensionality reduction**: TruncatedSVD (default 50 components) applied before clustering when the feature matrix is wider than the SVD component count. Configurable via `--svd-components`.
+- **Multi-method clustering**: The pipeline tries KMeans, Spectral Clustering, GMM, and HDBSCAN. The method+k combination with the best composite score wins. Configurable via `--clustering-methods`.
+- Composite scoring: silhouette*0.5 + balance*0.3 + cluster_count*0.2, applied identically across all methods.
+- CLINICAL_ANALYSIS.md includes a method comparison table when multiple methods are evaluated.
+- Month labels: M-n (before index), M0 (index), M+n (after index). Positive months always have "+" prefix.
+- Feature importance charts must show individual one-hot features colored by lane.
+- Temporal heatmaps must be table-style, mirroring the lane/feature heatmap layout exactly (same rows, months as columns instead of clusters).
+- Clinical analysis reports must include "so what" interpretation for every metric, population median comparisons for utilization, and specific (not placeholder) clinical interpretations.
+- American spelling in all outputs (utilization, not utilisation).
+- All numbers: commas for thousands, no unnecessary decimals, per-1000 rates always include a comparison.
+- Lane headers: ALL CAPS. Features: alphabetically sorted within lane.
+- Heatmap cells: events per 10,000 members (absolute rate). Shading = relativity to cohort avg. Sparse features: show "*" only.
+- No duplicate output files. Lane heatmaps produce only paginated `_page*.png` files, not an unpaginated base file.
+- Quality gate: runs with silhouette below `min_silhouette` (default 0.05) are rejected. Garbage clustering results must not be written.
+- UMAP legend must sort clusters numerically (1, 2, 3, ..., 10) not lexicographically.

@@ -1,0 +1,127 @@
+---
+description: Team glossary of healthcare data engineering and platform terminology
+alwaysApply: true
+---
+
+# Team Glossary
+
+Use these terms consistently in code, comments, documentation, and agent output. When a preferred term exists, use it; do not substitute synonyms.
+
+## People and Entities
+
+| Term | Definition | Notes |
+|------|-----------|-------|
+| **member** | An insured individual in a health plan. | Preferred over "patient" in claims and enrollment contexts. "Patient" is acceptable only in clinical/provider contexts. |
+| **provider** | A clinician or facility that delivers care. | Identified by NPI (CLM_SPRV_NPI). |
+| **book** | An insurance product type processed as a unit. | PPO, SPPO, POS, HMO, MEDR. Each book is processed independently through staging. |
+
+## Identifiers
+
+| Term | Column(s) | Definition |
+|------|----------|-----------|
+| **MEM_NUM** | MEM_NUM | Member number. Unique within a book. BIGINT, though sometimes stored as VARCHAR in source. |
+| **MASTERRECORDID** | MASTERRECORDID | Cross-system member identifier. VARCHAR. Used for joins across claims, lanes, and demographics. |
+| **MEDSRV_KEY** | MEDSRV_KEY | Medical service key. The standard dedup key for claims. BIGINT. |
+| **INT_CLM_NUM** | INT_CLM_NUM | Internal claim number. Groups service lines within a single claim. Not a dedup key on its own. |
+| **EPISODE_NUM** | EPISODE_NUM | Episode number assigned by the ETG grouper. |
+| **NPI** | CLM_SPRV_NPI | National Provider Identifier for the supervising provider. |
+
+## Insurance Products (Books)
+
+| Code | Full Name | Notes |
+|------|----------|-------|
+| **PPO** | Preferred Provider Organization | Largest volume. |
+| **SPPO** | Select PPO | Variant of PPO. |
+| **POS** | Point of Service | |
+| **HMO** | Health Maintenance Organization | |
+| **MEDR** | Medicare Risk | Also appears as "MEDICARE RISK" in source data. Normalize to "MEDR" via model_mapping. |
+
+## Clinical and Claims Concepts
+
+| Term | Definition |
+|------|-----------|
+| **claim** | A billing record for a healthcare service. One claim may have multiple service lines (CLM_LINE_NUM). |
+| **service line** | A single line item on a claim, identified by MEDSRV_KEY. |
+| **episode** | A clinically related group of services over time, assigned by the ETG grouper. Defined by ETG code, start/end dates, severity, complication, and comorbidity. |
+| **ETG** | Episode Treatment Group. A classification system that groups claims into clinically meaningful episodes. Can be truncated to 4 digits for category-level analysis. |
+| **lane** | A clinical pathway or care trajectory (e.g., physical therapy, imaging, surgical). Lanes are defined by combinations of diagnoses, procedures, and utilization patterns. |
+| **feature** | An event or characteristic within a lane (e.g., "MRI", "injection", "surgery"). |
+| **stage** | A severity or progression state assigned to a member at a point in time by the staging engine. Stages have priority (lower wins), persistence (transient/sticky/permanent), and may depend on prior stages. |
+| **staging** | The process of assigning members to disease progression stages based on claims, episodes, lanes, and clinical rules. |
+| **spur** | A data file partition downloaded from S3. Named after the file prefix pattern used in the source system. |
+
+## Financial Fields
+
+| Term | Column | Definition |
+|------|--------|-----------|
+| **allowed amount** | DW_ALLOW_AMT | The total amount the plan agrees to pay for a service. |
+| **liability** | DW_TOTAL_LIAB_AMT | The plan's financial liability for the service. |
+| **coinsurance** | COINS_AMT | Member's coinsurance portion. |
+| **copay** | COPAY_AMT | Member's copay portion. |
+| **deductible** | DEDUCT_AMT | Amount applied to the member's deductible. |
+| **PMPM** | (derived) | Per Member Per Month. A standard actuarial normalization for cost. |
+
+## Date Fields
+
+| Term | Column | Format | Notes |
+|------|--------|--------|-------|
+| **incurred date** | INCURRED_DT_DAY | `'01JAN2024'` (SAS) or DATE | The date the service was provided. Parse with `strptime(INCURRED_DT_DAY, '%d%b%Y')` unless the column is already DATE type. Always check type before parsing. |
+| **admission dates** | DW_ADM_FROM_DT, DW_ADM_TO_DT | VARCHAR | Facility admission and discharge dates. |
+| **episode dates** | EPI_START_DT, EPI_END_DT | VARCHAR | Episode boundary dates from the ETG grouper. |
+| **anchor date** | ANCHOR_LBP_DT | DATE | Reference date for relative time calculations in lane analysis. |
+
+## Reference Data
+
+All canonical reference data lives in `ReferenceData/reference.duckdb`, organized by payer schema: `medicare`, `commercial`, `ndc`, `elixhauser`, `geography` (all populated), `medicaid` (placeholder). Access via `ReferenceData.reference_db`, which defaults to the `medicare` schema. Full column-level documentation is in `ReferenceData/DATA_DICTIONARY.md`. The database is built from a separate build script (see `ReferenceData/DATA_DICTIONARY.md`).
+
+| Table | Contents | Use |
+|-------|---------|-----|
+| **cpt_cd** | 32,654 CPT codes with GROUP_CAT_CD, GROUP_SUB_CD | Procedure categorization |
+| **revenue_cd** | 321 revenue codes with GROUP_CAT_CD, GROUP_SUB_CD | Facility billing classification |
+| **bill_type** | 679 bill type codes with TREND_CAT_CD, FACILITY_TYPE, BILL_CLASSIFICATION | IP/OP/HH/SNF determination |
+| **bill_type_hs** | 679 bill type codes (health system variant) | Health system-specific IP/OP/HH/SNF |
+| **ms_drg** | 799 Medicare Severity DRGs with DRG_WGHT, GEO_LOS, AVG_LOS | Inpatient case mix |
+| **cms_drg** | 581 CMS DRGs | Older DRG classification |
+| **ap_drg** | 1,398 All Patient DRGs with severity levels | Alternative DRG grouping |
+| **chronic_dx** | 3,484 chronic condition diagnosis codes with CC_IND, SOURCE | Chronic disease identification |
+| **category_mapping** | 236 trend-to-group category crosswalk | Cost trend reporting |
+| **pot_cd** | 99 place of treatment codes with TREND_CAT_CD, location descriptors | Care setting classification |
+| **discharge_status** | 99 discharge status codes with descriptions | Post-acute disposition |
+| **esrd_cpt** | 95 ESRD CPT codes | ESRD identification |
+| **ltch** | 426 long-term care hospital facilities with CMS_CCN | LTCH identification |
+| **clm_cat_lookups** | 236 claims categorization codes (ER, SNF, HH, IRF, Room and Board revenue codes; specialty and taxonomy codes) | Claims categorization (parsed from legacy CLM_CAT_LKPS.sas) |
+| **revenue_code_flags** (view) | Revenue codes with boolean is_er, is_snf, is_hh, is_irf, is_room_board flags | Revenue code categorization |
+
+## Platform and Architecture
+
+| Term | Definition |
+|------|-----------|
+| **Unity Catalog** | Databricks governance layer. Used for access control, lineage, and IP protection. |
+| **UC function** | A Python or SQL function registered in Unity Catalog. Used to encapsulate reusable logic (risk scores, cost models) with controlled access grants. |
+| **Asset Bundle** | Databricks Asset Bundle (DAB). The deployment artifact for promoting code across environments. |
+| **clean room** | A Databricks Clean Room where validated code runs against sensitive data in isolation. |
+| **medallion architecture** | Bronze (raw ingestion), Silver (standardized), Gold (analytics-ready). Used in both DBT models and Delta Lake tables. |
+| **Tuva** | Open-source healthcare data model used for standardization (medical_claim, pharmacy_claim, eligibility). |
+
+## Abbreviations
+
+| Abbreviation | Expansion |
+|-------------|-----------|
+| **IP** | Inpatient |
+| **OP** | Outpatient |
+| **HH** | Home Health |
+| **SNF** | Skilled Nursing Facility |
+| **IRF** | Inpatient Rehabilitation Facility |
+| **LTCH** | Long-Term Care Hospital |
+| **ER** | Emergency Room / Emergency Department |
+| **MHSA** | Mental Health and Substance Abuse |
+| **DME** | Durable Medical Equipment |
+| **DRG** | Diagnosis Related Group |
+| **ETG** | Episode Treatment Group |
+| **NPI** | National Provider Identifier |
+| **PHI** | Protected Health Information |
+| **PII** | Personally Identifiable Information |
+| **PMPM** | Per Member Per Month |
+| **LBP** | Low Back Pain (the primary MSK condition in the current staging work) |
+| **MSK** | Musculoskeletal |
+| **CHF** | Congestive Heart Failure |

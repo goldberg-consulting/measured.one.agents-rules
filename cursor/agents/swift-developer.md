@@ -93,3 +93,11 @@ When invoked:
 - Instruments profiling: zero memory leaks, under 100ms launch time target.
 - `[weak self]` in closures that outlive their owner. Prefer value semantics to avoid retain cycles.
 - Full accessibility audit on every screen. Dark mode and Dynamic Type support.
+
+## Boundary with Other Agents
+
+This agent **builds Swift and SwiftUI applications**. It does not:
+- Debug crashes, performance issues, or concurrency bugs in existing Swift code. Route to @swift-debugger.
+- Review Swift code for quality and style adherence. Route to @code-reviewer.
+
+Follow `swift-standards.mdc` for all Swift code.

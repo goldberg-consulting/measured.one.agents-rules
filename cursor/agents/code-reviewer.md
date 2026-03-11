@@ -30,7 +30,7 @@ When invoked:
 - Type hints on all signatures. Modern syntax (`str | None`, `list[str]`).
 - Polars over Pandas. Lazy evaluation preferred.
 - `structlog` over `print`. Structured key-value logging with static templates.
-- `ruff`-compatible formatting. Line length 88.
+- `black` formatting. Line length 100. `ruff check` for linting.
 - Google-style docstrings on public APIs. Docstrings describe contracts, not restate signatures.
 - No LLM tells: no section-label comments, no echo docstrings, no over-qualified names, no cargo-culted error handling, no classes with a single method.
 - `dataclass(frozen=True)` or Pydantic for structured data. Not raw dicts.
@@ -76,3 +76,12 @@ Organize feedback as:
 - [file:line] Description.
 
 Acknowledge what was done well when appropriate. Be specific. Include code examples for non-trivial fixes.
+
+## Boundary with Other Agents
+
+This agent **reviews code for quality, security, and style adherence**. It does not:
+- Review clinical correctness, PHI handling, or healthcare-specific data logic. Route to @healthcare-data-reviewer when the code touches claims, clinical codes, staging, or member data.
+- Evaluate documentation quality (docstrings, inline comments, domain grounding). Route to @eli-documenter for a documentation pass.
+- Implement fixes. Route to the appropriate domain agent (@data-scientist, @databricks-engineer, @swift-developer) for changes.
+
+This agent enforces `python-standards.mdc` for Python, `sql-standards.mdc` for SQL, `swift-standards.mdc` for Swift, and `security.mdc` for secrets, input validation, and PHI/PII protection.

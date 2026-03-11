@@ -1,0 +1,150 @@
+---
+description: Planning template for validating ICD embedding pipelines stage by stage. Use when planning, designing, or validating a clinical code embedding pipeline (Word2Vec, TF-IDF, KMeans, PCA, spaghetti plots). Triggers the data-scientist agent to draft and the healthcare-data-reviewer to critique.
+alwaysApply: false
+---
+
+# Embedding Pipeline Validation Plan
+
+This rule structures the Plan phase for clinical code embedding pipelines. When the user asks to plan, validate, or design an embedding pipeline, follow this stage-by-stage protocol.
+
+## Agent Roles
+
+- **@data-scientist** drafts the validation plan for each stage: what to compute, what thresholds to set, what code to write, what outputs to produce.
+- **@healthcare-data-reviewer** critiques each stage for clinical correctness, data leakage, PHI exposure, and whether the validation criteria are clinically meaningful (not just statistically convenient).
+- **@visualization-creator** produces all charts and diagrams: pipeline staging visuals, distribution plots, spaghetti plots, cluster scatter plots. Consulted at Stages 0 (vocabulary histograms), 3 (neighbor similarity heatmaps), 6 (cluster profiles), and 7 (PCA spaghetti).
+- **@whats-strange** reviews pipeline outputs after each stage to identify anomalies, interesting patterns, and noise. Consulted after Stages 3 (embedding neighbors), 4 (TF-IDF weights), 6 (cluster composition), and 7 (trajectory patterns).
+
+The data-scientist proposes; the healthcare-data-reviewer challenges clinical logic; the visualization-creator produces the visual artifacts; whats-strange examines outputs for signal, noise, and surprises.
+
+## Pipeline Stages
+
+Work through each stage sequentially. For each stage, the plan must specify: (1) inputs, (2) transformation, (3) outputs, (4) validation criteria with pass/fail thresholds, and (5) what blocks progression to the next stage.
+
+### Stage 0: Data Ingestion and Vocabulary Audit
+
+**Question**: Does the raw data load correctly, and does the ICD vocabulary have sufficient breadth to support embedding?
+
+Plan must address:
+- Source format (parquet, Delta, CSV) and schema validation on ingest (column names, types, nulls).
+- Row counts and member counts before and after any filtering.
+- ICD code cardinality: how many unique ICD-10 codes appear? What is the frequency distribution (log-scale)?
+- Vocabulary breadth check: are all major ICD-10 chapters (A00-T88, plus Z codes) represented? Flag chapters with zero or near-zero codes as potential data quality issues.
+- Date range and coverage: what incurred date span does the data cover? Any gaps?
+
+**Pass criteria**: schema validates, row counts match expectations, ICD vocabulary spans at least 15 of 22 ICD-10 chapters.
+**Blocks**: everything downstream.
+
+### Stage 1: Anchor Assignment
+
+**Question**: Does the cohort split into TARGET_OCCURRED and TARGET_AVOIDED correctly, with clinically valid anchor logic?
+
+Plan must address:
+- Anchor definition: what clinical event defines TARGET_OCCURRED? What ICD/CPT codes, what lookback/look-forward windows?
+- Exclusion criteria: who is excluded from both groups and why?
+- Group sizes: N in each group, prevalence of the target event, whether the split is severely imbalanced.
+- Temporal integrity: does the anchor date precede all feature windows? No future information leaking into group assignment.
+
+**Reviewer focus**: Is the anchor definition clinically appropriate? Are the codes correct for the condition? Are exclusions justified?
+**Pass criteria**: both groups are non-empty, prevalence is between 1% and 50% (or the imbalance is documented with a mitigation plan), no temporal leakage.
+**Blocks**: all downstream stages use the group labels.
+
+### Stage 2: Member-Month Aggregation
+
+**Question**: Does the aggregation produce clean ICD code sequences per member-month, suitable for embedding input?
+
+Plan must address:
+- Aggregation grain: one row per member per month. Confirm no duplicates at this grain.
+- ICD list construction: how are codes collected per member-month? Are they deduplicated within the month, or preserved as a bag with repeats?
+- Minimum sequence length: members with fewer than N codes across their history are dropped. Document N and the clinical rationale.
+- Output schema: member identifier (hashed or anonymized), year-month, list of ICD codes.
+
+**Reviewer focus**: Is deduplication logic clinically appropriate? Does dropping short-sequence members bias the sample (e.g., dropping healthy members who rarely interact with the system)?
+**Pass criteria**: no duplicate member-months, all ICD codes are valid format (letter + 2-5 characters), dropped-member rate documented.
+**Blocks**: embedding training requires these sequences.
+
+### Stage 3: Word2Vec Training and Semantic Validation
+
+**Question**: Does the embedding model learn clinically meaningful relationships between ICD codes?
+
+This is the most important validation stage. Plan must address:
+- Model selection and hyperparameters: Word2Vec (gensim), skip-gram vs CBOW, `vector_size`, `window`, `min_count`, `epochs`, `seed`. All pinned and logged.
+- Training convergence: loss logged per epoch, monotonically decreasing or plateauing.
+- **Sentinel code nearest-neighbor validation** (primary quality gate):
+  - I50 (heart failure): neighbors should include I25 (chronic ischemic heart disease), I48 (atrial fibrillation), I11 (hypertensive heart disease), J81 (pulmonary edema), N17 (acute kidney injury). These reflect known comorbidity and pathophysiology.
+  - M54.5 (low back pain): neighbors should include other M54.x codes, M47 (spondylosis), M51 (disc disorders), G89 (pain codes).
+  - E11 (type 2 diabetes): neighbors should include E78 (hyperlipidemia), I10 (hypertension), E13 (other diabetes), N18 (CKD).
+  - Document at least 3 sentinel codes, their expected clinical neighbors, and actual `most_similar()` output with cosine similarities.
+- Cross-chapter neighbor analysis: for each sentinel, what fraction of top-10 neighbors share the same ICD chapter? Cross-chapter neighbors require clinical justification.
+
+**Reviewer focus**: Are the sentinel codes well-chosen for the condition under study? Are cross-chapter neighbors clinically explainable or evidence of a bad embedding? Is `min_count` dropping clinically important rare codes?
+**Pass criteria**: for each sentinel code, a majority of top-10 neighbors are from the same or clinically adjacent ICD chapter. Any unexplained cross-chapter intrusion fails the stage.
+**Blocks**: all downstream stages consume these embeddings.
+
+### Stage 4: TF-IDF Weighting
+
+**Question**: Does the weighting scheme correctly identify rare, discriminating codes and down-weight ubiquitous ones?
+
+Plan must address:
+- TF-IDF computation: each member's full history is one "document," codes are "terms." Use scikit-learn `TfidfVectorizer`.
+- Inspect the top-10 highest IDF codes and top-10 lowest IDF codes. High-IDF codes should be rare, specific conditions. Low-IDF codes should be common, non-specific codes (Z87, R codes, E11.9).
+- Verify that weighting does not zero out clinically important codes. A rare code with high IDF should amplify signal, not disappear due to low TF.
+
+**Reviewer focus**: Do the high-IDF codes make clinical sense for this population? Are any clinically important codes getting inappropriately suppressed?
+**Pass criteria**: high-IDF codes are clinically specific, low-IDF codes are clinically non-specific, no clinically important codes have near-zero weight.
+**Blocks**: weighted embeddings feed into member vectors.
+
+### Stage 5: Monthly Embedding Vector Validation
+
+**Question**: Are the per-member-month embedding vectors non-degenerate and numerically reasonable?
+
+Plan must address:
+- For each member-month, the vector is the (TF-IDF-weighted) mean of its code embeddings.
+- Compute L2 norm distribution across all member-month vectors.
+- Zero-vector rate: what percentage of member-months produce a zero vector (no codes survived vocabulary filtering)?
+- Norm distribution: should be unimodal. Bimodal distribution suggests a subpopulation whose codes are systematically absent from the vocabulary.
+- Dimensionality check: vector dimension matches `vector_size` from Stage 3.
+
+**Pass criteria**: zero-vector rate < 1%, norm distribution is unimodal, no NaN or Inf values.
+**Blocks**: pooling and clustering operate on these vectors.
+
+### Stage 6: Time-Decayed Pooling and Clustering
+
+**Question**: Does longitudinal pooling with time decay and KMeans produce separable, interpretable clusters?
+
+Plan must address:
+- Time-decay function: `w_t = exp(-lambda * (T - t))`, normalized per member. Document lambda (half-life) and the anchor date T.
+- Sensitivity to lambda: compute clustering metrics at 2-3 decay rates. Report how sensitive the clusters are to this choice.
+- KMeans: number of clusters (k), initialization (`k-means++`), random seed. Evaluate with silhouette score, Calinski-Harabasz, Davies-Bouldin.
+- **Cluster clinical profiles**: for each cluster, report the top-10 most frequent ICD codes and top-10 highest TF-IDF codes. Assign a clinical description. Clusters without an interpretable clinical theme indicate a problem.
+- Compare cluster composition by TARGET_OCCURRED vs TARGET_AVOIDED. Do clusters separate the outcome groups, or is assignment independent of outcome?
+
+**Reviewer focus**: Are cluster profiles clinically coherent? Does the decay rate have clinical justification (e.g., 6-month half-life for acute conditions, 24-month for chronic)? Is the number of clusters justified?
+**Pass criteria**: silhouette > 0, at least one cluster metric improves over random assignment, each cluster has a documented clinical interpretation.
+**Blocks**: visualization depends on cluster labels.
+
+### Stage 7: PCA and Visualization
+
+**Question**: Does the 2D projection produce an interpretable visualization of member trajectories?
+
+Plan must address:
+- PCA on the pooled member vectors. Report explained variance for the first 2 and first 10 components.
+- If the first two components explain < 10% of variance, document this caveat prominently on the plot and in any accompanying narrative. The 2D view is lossy.
+- Spaghetti plot: each member's monthly position in 2D PCA space, connected chronologically. Color by outcome (TARGET_OCCURRED vs TARGET_AVOIDED) or cluster assignment.
+- Subsample members for readability (N per group, randomly selected, seed pinned).
+- Output format: interactive Plotly HTML to `output/compression_spaghetti.html`.
+- Annotate the plot with cluster centroids, explained variance, and member count per group.
+
+**Reviewer focus**: Is the visualization misleading given low explained variance? Are spaghetti plot trajectories clinically interpretable, or just visual noise?
+**Pass criteria**: plot renders without error, explained variance is reported, outcome groups are visually distinguishable (or the lack of separation is documented as a finding).
+**Blocks**: nothing; this is the terminal output.
+
+## Plan Delivery Format
+
+Present the completed plan as a single document with:
+1. **Pipeline overview**: one paragraph describing the analytical goal and the data.
+2. **Stage table**: a summary table with columns: Stage, Validation Question, Pass Criteria, Agent Responsible.
+3. **Stage details**: the full plan for each stage as described above.
+4. **Reviewer findings**: any critiques or flags raised by @healthcare-data-reviewer, organized by severity (CRITICAL, WARNING, SUGGESTION, CLINICAL NOTE).
+5. **Open decisions**: hyperparameters, thresholds, or design choices that require user input before building.
+
+Do not begin implementation until the user approves the plan.

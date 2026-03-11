@@ -1,0 +1,192 @@
+---
+description: Routes tasks to specialist agents based on domain context and development phase
+alwaysApply: true
+---
+
+# Agent Routing
+
+When a task falls within a specialist's domain, hand off to the appropriate agent rather than handling it generically. Follow the lifecycle phases below when the user is working through a multi-step effort.
+
+## Development Lifecycle
+
+Work follows three phases. The user may enter at any phase. Match their intent to the phase and involve the listed agents.
+
+### Phase 1: Plan
+
+Triggered by: "plan", "design", "architect", "scope", "break down", "think through", "how should we", "what's the approach"
+
+1. **Identify the domain** from the user's description and select the implementation agent (see Routing Table).
+2. **Draft the plan** using the implementation agent's domain expertise. The plan should include scope, approach, key decisions, file changes, and risks.
+3. **Review the plan** by invoking @healthcare-data-reviewer (if the work touches healthcare data, claims, clinical logic, or PHI) or @code-reviewer (for all other code). The reviewer should evaluate the plan for correctness, missing edge cases, security, and clinical logic gaps before any code is written.
+4. **Present the reviewed plan** to the user with any reviewer feedback incorporated. Do not begin implementation until the user approves.
+
+### Phase 2: Build
+
+Triggered by: "build", "implement", "write", "create", "add", "fix", "refactor", or approval of a plan
+
+1. **Route to the implementation agent** from the Routing Table.
+2. **Follow the plan** if one was established. Do not deviate without noting the change.
+3. **Apply all active rules** (python-standards, sql-standards, security, glossary, etc.) during implementation.
+4. **Document the work** by invoking @eli-documenter after substantial implementation, before review.
+
+### Phase 3: Review
+
+Triggered by: "review", "check", "look over", "before I commit", "PR review", "what did I miss", or after completing a build phase
+
+1. **Route to the appropriate reviewer**:
+   - Healthcare data, claims, clinical logic, PHI, DBT models in healthcare context, data science code: @healthcare-data-reviewer
+   - All other code: @code-reviewer
+2. **The reviewer evaluates** the implemented code against its review checklist (severity-ordered findings).
+3. **Present findings** to the user organized by severity (CRITICAL, WARNING, SUGGESTION, CLINICAL NOTE).
+
+### Phase 4: Validate
+
+Triggered by: "validate", "is this ready", "final check", "production ready", "before we ship", or after review findings have been addressed
+
+1. **Route to @reality-checker** for evidence-based validation of the deliverable.
+2. The reality-checker gathers evidence (runs tests, checks output, reviews logs) and reports findings.
+3. Assessment defaults to NEEDS WORK unless evidence is overwhelming.
+4. If NEEDS WORK: findings loop back to Phase 2 (Build) with specific feedback. Track the iteration count.
+5. If CONDITIONAL PASS or READY: the deliverable can proceed.
+
+### Phase 5: Summarize
+
+Triggered by: "summarize", "executive summary", "brief the team", "what should I tell leadership", or after validation passes
+
+1. **Route to @executive-summarizer** to distill the analytical output or project results into a decision-ready brief.
+2. The summary follows SCQA structure with quantified findings and prioritized recommendations.
+
+When the user does not specify a phase, infer it from context. If they paste code or a diff, that is a review. If they describe something they want built, start with a plan unless the task is trivial (single-file, obvious approach).
+
+## Pipeline and Infrastructure Work
+
+When the task involves building or modifying data pipelines, orchestration scripts, or Databricks infrastructure (as opposed to a single model edit), follow this refined workflow. These lessons come from production experience building the Tuva analytics pipeline.
+
+### Work in Testable Chunks
+
+Break large infrastructure work into independently testable pieces. Each piece should produce an artifact that can be validated before moving on.
+
+**Good chunk boundaries for pipeline work:**
+- YAML configuration files (validate syntax, DAG integrity, dependency correctness)
+- Runner scripts (validate with `--print-dag` and `--dry-run` before any real submission)
+- Bundle job definitions (validate with `databricks bundle validate`)
+- README documentation (review for accuracy against the actual code)
+
+**Natural review checkpoints:**
+- After defining the DAG structure (before writing the runner)
+- After the runner compiles and `--dry-run` produces a valid job spec
+- After the bundle job definition matches the YAML stages
+- After documentation is written (before committing)
+
+### Agent Collaboration on Pipeline Work
+
+| Step | Agent | What they do | Exit criteria |
+|------|-------|-------------|---------------|
+| 1. Design the DAG | @databricks-engineer | Define stages, selectors, dependencies, timeouts in YAML | YAML validates, DAG integrity check passes |
+| 2. Build the runner | @databricks-engineer | Compile YAML to Databricks job spec, add CLI flags | `--print-dag` and `--dry-run` produce correct output |
+| 3. Build the bundle job | @databricks-engineer | Mirror YAML stages as static bundle tasks | Task keys and depends_on match the YAML |
+| 4. Document | @eli-documenter | README section, inline docs, YAML header | Cold reader can understand the system without reading code |
+| 5. Review completeness | @healthcare-data-reviewer | Verify all claims-based marts are included, no clinical-only models, correct dependency order | No CRITICAL findings |
+| 6. Review code quality | @code-reviewer | Security, style, dead code, hardcoded values | No CRITICAL findings |
+| 7. Validate | @reality-checker | `--dry-run` on target cohort, YAML/Python syntax, lint clean | CONDITIONAL PASS or READY |
+
+Steps 1-3 should each be reviewed incrementally, not batched. A DAG design error found at step 5 is cheaper to fix than one discovered after the bundle job and documentation are built on top of it.
+
+### When Evaluating Architecture Changes
+
+When the user asks "should we switch to X" or "what is the fastest way," do not jump to implementation. Follow this sequence:
+
+1. **Assess the current state.** Read the existing code, timing data, and documented constraints. Identify where the actual bottleneck is.
+2. **Clarify scope.** Use AskQuestion to determine whether the user wants an execution-target change, a partial rewrite, or a full migration.
+3. **Present options with tradeoffs.** Order by risk and effort. The lowest-risk path that achieves the goal should be presented first.
+4. **Benchmark before rewriting.** If a rewrite is proposed, define success criteria and parity checks before writing code. A rewrite that changes behavior is a bug, not an optimization.
+5. **Isolate experiments.** Use separate branches, catalogs, or schema prefixes for experimental work. Never let an experiment overwrite production outputs.
+
+### Reporting and Status
+
+For multi-step pipeline work, maintain a running status using `todo_write`:
+- Mark each chunk as pending, in_progress, or completed
+- When a review returns findings, update the todo list with specific fix items
+- When all items are complete, present a summary of what changed and how to verify it
+
+Present review findings in severity order: CRITICAL (must fix), WARNING (should fix), SUGGESTION (consider). Include file paths and specific stage/task names. Do not present long lists of "everything looks fine" confirmations; report only findings that require action or explicit acknowledgment.
+
+### Pre-Submission Portability Audit
+
+Before submitting any pipeline to Databricks, run a systematic check for hardcoded values that will break when the catalog, schema, cohort, or workspace changes. This audit catches the class of errors where code works in one environment but fails in another.
+
+**What to search for (use Grep across the connector and loader directories):**
+
+1. **Hardcoded catalog names.** Search for your catalog name in SQL, YAML, and Python outside of `var()` defaults and profile fallbacks. Every catalog reference should resolve from a var or env var.
+2. **Hardcoded schema names.** Search for specific cohort schemas in source definitions, joins, or CTEs. Schema references should resolve from `var('cohort')`, `var('source_schema')`, or `var('lookup_schema')`.
+3. **Hardcoded workspace paths.** Search for specific user paths (`/Workspace/Users/someone@...`) or workspace IDs (`adb-NNNN`) in Python scripts. These should resolve from CLI auth, env vars, or auto-detection.
+4. **Reserved characters in Unity Catalog tags.** Search for `SET TAGS` and verify tag names contain only letters, numbers, and underscores. Hyphens, dots, colons, equals, slashes, and commas are rejected by Unity Catalog.
+5. **Cross-cohort dependencies.** Search for any source or ref that points at a different cohort's schema. These must be parameterized so the correct schema resolves for each cohort.
+6. **Hardcoded warehouse or cluster IDs.** Search for specific IDs in Python and YAML. These should be configurable via CLI flags or env vars with a documented default.
+
+**When to run this audit:**
+- Before the first submission to a new catalog or workspace
+- After any change to source definitions, profile configs, or post-hooks
+- As part of the step 6 (Review code quality) in the pipeline work table above
+
+**How to run it:**
+
+```
+grep -rn '<your_catalog>\|<cohort_schema>\|SET TAGS\|adb-' connectors/ loader/ --include='*.sql' --include='*.yml' --include='*.py' | grep -v 'var(' | grep -v '#'
+```
+
+Any match that is not inside a `var()` default, an `env_var()` fallback, or a comment is a potential portability issue.
+
+## Orchestration Principles
+
+These principles govern how agents collaborate across phases. They are drawn from production pipeline management patterns.
+
+### Quality Gates
+No phase advances until its exit criteria are met. A plan must be reviewed before building. Code must be reviewed before validation. Validation must pass before summarization. Skipping a gate requires explicit user override.
+
+### Build-Review Loops
+For multi-task efforts, review each task incrementally rather than batching all reviews at the end. A defect found in task 1 during review is cheaper to fix than the same defect found after task 8 is built on top of it.
+
+### Retry Logic
+If a review or validation returns CRITICAL findings, the work loops back to Build with specific feedback. Track the iteration count. Three cycles is typical for substantial work. If the work has not passed after three cycles, the problem is likely architectural; escalate rather than continuing to iterate on symptoms.
+
+### Context Preservation
+When handing off between agents, include: what was done, what was found, what the next agent needs to know, and what files were changed. Do not force the receiving agent to rediscover context that the sending agent already established.
+
+### Progress Tracking
+For multi-step efforts, maintain a running status: how many tasks are complete, which task is current, what the last review found, and what the next action is. Use the todo_write tool to track this.
+
+## Routing Table
+
+| Context | Implementation Agent | Reviewer |
+|---------|---------------------|----------|
+| Databricks, PySpark, Spark SQL, DBT models, Delta Lake, Unity Catalog, Databricks CLI, Databricks Workflows | @databricks-engineer | @healthcare-data-reviewer (if clinical data) or @code-reviewer |
+| Polars, DuckDB, scikit-learn, statistical modeling, ML pipelines, exploratory analysis, visualization | @data-scientist | @healthcare-data-reviewer (if clinical data) or @code-reviewer |
+| SwiftUI, iOS, macOS, Swift concurrency, Swift packages | @swift-developer | @code-reviewer |
+| Claims processing, staging engines, episode grouping, clinical pipelines, healthcare analytics | @data-scientist or @databricks-engineer (by platform) | @healthcare-data-reviewer |
+| Clinical code embeddings, ICD/CPT embedding pipelines, Word2Vec on claims, representation learning, embedding validation | @data-scientist | @healthcare-data-reviewer |
+| VAE, ConvVAE, variational autoencoders on claims, claims image construction, latent space analysis, synthetic claims generation, beta-VAE tuning, KL annealing | @vae-claims | @healthcare-data-reviewer |
+| Data visualization, charts, pipeline diagrams, consulting-quality PNGs, spaghetti plots, staging schematics | @visualization-creator | @code-reviewer |
+| Analytical output review, anomaly detection in results, "what's interesting," pattern interpretation, signal vs noise | @whats-strange | @healthcare-data-reviewer (if clinical data) |
+| Reference data lookups, code validation, "what codes exist for X," schema inventory, code-to-category mapping, DRG/ETG/CPT/ICD lookup, sampling codes | @reference-data-librarian | (not typically reviewed) |
+| SAS-to-Python conversion: SAS programs, formats, macros, DATA steps, PROC SQL migration | @sas-to-python | @healthcare-data-reviewer (if clinical data) or @code-reviewer |
+| Python debugging: stack traces, test failures, Polars/DuckDB/PySpark/Databricks errors | @debugger | (not typically reviewed) |
+| Swift debugging: crashes, Xcode errors, SwiftUI issues, Instruments profiling | @swift-debugger | (not typically reviewed) |
+| Word-to-Markdown conversion, .docx reformatting, document structure extraction | @doc-to-markdown | @code-reviewer |
+| Educational content, concept explanations, Observable Framework teaching pages, figure sequences, mathematical walkthroughs | @scientific-educator | @code-reviewer |
+| Project organization, experiment scaffolding, directory structure, status tracking, auditing repo layout | @project-organizer | (not typically reviewed) |
+| Code documentation, docstrings, inline comments, stale docs, "document this file/module", cold-reader readability | @eli-documenter | @code-reviewer |
+| Executive summaries, leadership briefs, analytical output distillation, decision-ready deliverables | @executive-summarizer | (not typically reviewed) |
+| UI personality, micro-interactions, playful microcopy, Easter eggs, empty state design, celebration moments | @whimsy-injector | @code-reviewer |
+| Evidence-based validation, production readiness, final quality gate, "is this ready," pipeline output verification | @reality-checker | (not typically reviewed) |
+| Git workflow enforcement, branch hygiene, pre-commit compliance, forbidden paths, commit message audit, PR readiness, .gitignore audit | @git-gatekeeper | (not typically reviewed) |
+| Tuva dbt pipeline operations: submitting dbt runs, monitoring run status, fetching logs, debugging model failures, checking table row counts, bundle deployment, compile vs run vs build decisions, timeout management, serverless vs cluster profile selection | @tuva-pipeline-operator | @healthcare-data-reviewer |
+| Project tickets, use case definitions, epic breakdowns, architecture tickets, technical planning documents | @ticketer | (not typically reviewed) |
+
+## Routing Rules
+
+- If a task spans multiple domains (e.g., reviewing a DBT model that processes claims data), prefer the more specialized agent. A healthcare data reviewer who knows DBT is more useful than a generic DBT engineer for clinical pipelines.
+- If two agents are equally relevant, route to the one whose review criteria are stricter. Review agents take precedence over implementation agents for review tasks.
+- Do not route simple, single-file edits to an agent unless the domain expertise is genuinely needed.
+- When a review task involves healthcare data, PHI, or clinical logic, always route to @healthcare-data-reviewer rather than the general @code-reviewer.
+- During planning, the implementation agent drafts and the review agent critiques. Both should be consulted before the user sees the final plan.

@@ -1,0 +1,168 @@
+---
+description: Decision guide for when to use reference data from ReferenceData/reference.duckdb. Consult when categorizing claims, labeling charts, filtering cohorts, validating clinical codes, building features, or debugging joins against reference tables.
+alwaysApply: false
+---
+
+# Reference Data Decision Guide
+
+All reference data lives in `ReferenceData/reference.duckdb`, organized by payer schema:
+
+| Schema | Status | Contents |
+|---|---|---|
+| `medicare` | Populated | 15 objects: CPT, DRG, revenue, bill type, chronic DX, claims category lookups, etc. |
+| `commercial` | Populated | 27 objects: ETG, PACES, ICD-10 (73K codes), DHS CPT/HCPCS, severity models, outliers, drug codes |
+| `ndc` | Populated | 2 tables: ~111K drug products, ~210K packages (FDA NDC) |
+| `elixhauser` | Populated | 2 tables: 38 comorbidity measures, 4,542 ICD-to-comorbidity mappings |
+| `geography` | Populated | 2 tables: 44K ZIP-to-FIPS crosswalk, 52 state timezones |
+| `medicaid` | Placeholder | Empty, ready for Medicaid-specific reference data |
+
+Access via `ReferenceData.reference_db`. All functions default to the `medicare` schema:
+
+```python
+from ReferenceData.reference_db import connect, query, get_er_revenue_codes, lookup_drg
+
+# Defaults to medicare schema
+df = query("SELECT * FROM ms_drg WHERE DRG_WGHT > 10")
+er_codes = get_er_revenue_codes()
+
+# Explicit schema (when medicaid/commercial are populated)
+df = query("SELECT * FROM chronic_dx", schema="medicaid")
+er_codes = get_er_revenue_codes(schema="commercial")
+
+# Cross-schema query with fully qualified names
+df = query("SELECT * FROM medicare.ms_drg UNION ALL SELECT * FROM commercial.ms_drg")
+```
+
+Full column-level documentation is in `ReferenceData/DATA_DICTIONARY.md`.
+
+## By Task: Which File Do I Need?
+
+### Categorizing claims by care setting (IP / OP / HH / SNF / ER)
+
+**Primary**: `bill_type` table (or `bill_type_hs` for health system variant)
+- Join on `BILL_TYPE_CD` to get `TREND_CAT_CD` (IP, OP, HH, SNF) and `FACILITY_TYPE` / `BILL_CLASSIFICATION`.
+- This is the definitive IP vs OP determination. Do not hardcode bill type ranges.
+
+**Supporting**: `revenue_code_flags` view
+- Pre-joined boolean flags: `is_er`, `is_snf`, `is_hh`, `is_irf`, `is_room_board` per revenue code. No manual join needed.
+- ER identification: `query("SELECT REV_CD FROM revenue_code_flags WHERE is_er = true")` or `get_er_revenue_codes()`.
+
+**Supporting**: `pot_cd` table
+- Place of treatment codes. `POT_LOC` gives IP/OP/UN classification. `TREND_CAT_CD` maps to the standard trend categories.
+- Use when the claim carries a place-of-treatment field rather than a bill type (professional claims vs facility claims).
+
+**Supporting**: `clm_cat_lookups` table
+- Contains all ER, SNF, HH, IRF, Room and Board revenue code sets plus specialty and taxonomy codes. Use `get_clm_cat_codes("ER_REV")` for direct set access.
+
+### Categorizing procedures
+
+**Primary**: `cpt_cd` table (32,654 rows)
+- Join on `CPT` to get `GROUP_CAT_CD` (Surgical, Lab/Path, Radiology, Drugs, etc.) and `GROUP_SUB_CD` (more granular).
+- `GROUP_SUB_RANK` provides a numeric ordering for display and priority when a procedure maps to multiple sub-categories.
+- `get_cpt_categories()` returns a Polars DataFrame with CPT, CPT_DESC, GROUP_CAT_CD, GROUP_SUB_CD.
+- This is the canonical procedure categorization. Never hardcode CPT ranges for category assignment.
+
+### Categorizing inpatient stays by severity and case mix
+
+**Primary**: `ms_drg` table (799 rows, current Medicare Severity DRGs)
+- Join on `DRG`. Provides `DRG_DESC`, `GROUP_CAT_CD`, `GROUP_SUB_CD`, `DRG_SEVERITY_METRICS` (Y/N), `DRG_WGHT`, `GEO_LOS`, `AVG_LOS`.
+- `DRG_WGHT` is the relative weight for expected cost benchmarking. Actual cost / (DRG_WGHT * base rate) gives a cost efficiency index.
+- `lookup_drg("001")` returns a dict with all DRG attributes.
+- Use for any inpatient case mix adjustment, cost benchmarking, or severity stratification.
+
+**Alternatives**:
+- `cms_drg` table (581 rows): older CMS DRG grouping. Use only when source data uses pre-MS-DRG codes. `lookup_drg("001", system="cms")`.
+- `ap_drg` table (1,398 rows): All Patient DRGs with severity levels (1-4 in the `AP-DRG-SEVERITY` field). `lookup_drg("0011", system="ap")`.
+
+### Identifying chronic conditions
+
+**Primary**: `chronic_dx` table (3,484 rows)
+- Join on `DX` (diagnosis code). `CC_IND` gives the chronic condition name. `SOURCE` indicates whether the definition comes from Commercial or CMS Medicare logic.
+- `get_chronic_dx()` returns the full table as a Polars DataFrame.
+- Use for flagging members with chronic conditions, building comorbidity profiles, and filtering cohorts.
+- Note: these are ICD-9 and ICD-10 codes mixed. Check the code format before joining (ICD-10 starts with a letter; ICD-9 is numeric).
+
+### Identifying ESRD members
+
+**Primary**: `esrd_cpt` table (95 rows)
+- Join on `CPT`. All rows have `ESRD = 'Y'`.
+- Use as a filter: any member with a claim matching these CPT codes has received ESRD-related services.
+
+### Identifying long-term care hospital stays
+
+**Primary**: `ltch` table (426 rows)
+- Join on `CMS_CCN` (CMS Certification Number) to the facility identifier on the claim.
+- `LTCH_FLAG = 'Y'` for all rows. Contains facility name, address, state, zip, and participation date.
+- Use for classifying facility claims as LTCH vs general acute.
+
+### Mapping cost trend categories
+
+**Primary**: `category_mapping` table (236 rows)
+- Maps `TREND_CAT_CD` / `TREND_SUB_CD` to `GROUP_CAT_CD` / `GROUP_SUB_CD` and their "final" variants (`_FNL` columns).
+- `get_category_mapping()` returns the table filtered to non-empty rows.
+- Use when rolling up cost from trend-level (IP, OP, HH, SNF, RX) to group-level (Acute, Ambulatory, etc.) for reporting.
+- The `_FNL` columns represent the final reporting hierarchy after adjustments. Use these for client-facing reports.
+
+### Interpreting discharge disposition
+
+**Primary**: `discharge_status` table (99 rows)
+- Join on `Discharge_Status_Code`. Returns `Discharge_Status_Description`.
+- Use for readmission analysis (discharged home vs transferred to SNF), post-acute utilization patterns, and mortality flagging (codes 20, 40, 41, 42).
+
+### Labeling charts and visualizations
+
+Query the relevant tables from `reference.duckdb`. The visualization-creator agent should join to reference data before placing any code on a chart axis or legend.
+
+| What is on the axis | Query table | Label column |
+|---|---|---|
+| CPT codes | cpt_cd | GROUP_CAT_CD or GROUP_SUB_CD |
+| Revenue codes | revenue_cd | REV_CD_DESC |
+| Bill types | bill_type | FACILITY_TYPE + BILL_CLASSIFICATION |
+| DRG codes | ms_drg (or cms_drg / ap_drg) | DRG_DESC |
+| Discharge status | discharge_status | Discharge_Status_Description |
+| Diagnosis codes (chronic flag) | chronic_dx | CC_IND |
+| Place of treatment | pot_cd | POT_NAME or POT_LOC_DESC |
+| Trend categories | category_mapping | GROUP_CAT_CD_FNL / GROUP_SUB_CD_FNL |
+
+### Building features for ML or embeddings
+
+- **Procedure features**: join `cpt_cd` for GROUP_CAT_CD / GROUP_SUB_CD. Use these categories as feature dimensions rather than raw CPT codes (reduces cardinality from 32K to ~20 categories).
+- **Facility features**: join `bill_type` for IP/OP/HH/SNF flags. Query `revenue_code_flags` view for service type booleans (is_er, is_room_board, etc.).
+- **Severity features**: join `ms_drg` for DRG_WGHT and DRG_SEVERITY_METRICS. Join `ap_drg` for 4-level severity.
+- **Comorbidity features**: join `chronic_dx` to flag chronic conditions per member. Count of distinct chronic conditions is a standard comorbidity index.
+- **Cost benchmarking**: join `ms_drg` for DRG_WGHT. Compute observed/expected cost ratio as a normalized feature.
+- **Claims categorization**: use `clm_cat_lookups` for ER/SNF/HH/IRF/Room and Board membership tests. `get_clm_cat_codes("ER_REV")` returns a frozenset for Polars `.is_in()` operations.
+
+### Debugging unexpected join results
+
+Common pitfalls when joining to reference data:
+
+| Problem | Cause | Fix |
+|---|---|---|
+| Revenue code join drops rows | Leading zeros: source has `"450"`, reference has `"0450"` | Pad to 4 characters before joining: `lpad(rev_cd, 4, '0')` |
+| DRG join drops rows | Type mismatch: source DRG is int (`1`), reference is string (`"001"`) | Cast both to string and pad: `lpad(cast(drg as varchar), 3, '0')` |
+| CPT join drops rows | Source includes HCPCS codes that are not in `cpt_cd` | `cpt_cd` covers CPT only. HCPCS Level II codes (starting with letters A-V) need a separate reference. |
+| CHRONIC_DX join drops rows | ICD-9 vs ICD-10 mismatch | Check whether source data uses ICD-9 (numeric prefix) or ICD-10 (letter prefix). `chronic_dx` contains both. |
+| BILL_TYPE join returns nulls for TREND_CAT_CD | Bill type not in reference table | Source may have 4-digit bill types; reference uses 3-digit. Truncate or pad as needed. Compare `bill_type` vs `bill_type_hs`; some codes exist in one but not the other. |
+| CATEGORY_MAPPING first row is empty | Known data issue | `get_category_mapping()` filters out empty rows automatically. For raw queries, filter where TREND_CAT_CD is not null/empty. |
+| LTCH join on facility ID fails | CMS_CCN format varies | Some sources store CCN with leading zeros, some without. Also check that the facility ID field on the claim corresponds to CMS_CCN, not NPI. |
+
+## Table Quick Reference
+
+| Table | Rows | Key Column | Best For | Convenience Function |
+|---|---|---|---|---|
+| cpt_cd | 32,654 | CPT | Procedure categorization, feature engineering, chart labels | `get_cpt_categories()` |
+| revenue_cd | 321 | REV_CD | Revenue code classification, service type | `query("SELECT * FROM revenue_cd")` |
+| revenue_code_flags (view) | 321 | REV_CD | ER/SNF/HH/IRF/Room and Board boolean flags | `get_revenue_code_flags()` |
+| bill_type | 679 | BILL_TYPE_CD | IP/OP/HH/SNF determination, care setting | `get_bill_type_classification()` |
+| bill_type_hs | 679 | BILL_TYPE_CD | Same as bill_type, health system variant | `query("SELECT * FROM bill_type_hs")` |
+| ms_drg | 799 | DRG | Case mix, severity, cost benchmarking (DRG_WGHT) | `lookup_drg("001")` |
+| cms_drg | 581 | DRG | Legacy DRG classification (pre-MS-DRG data) | `lookup_drg("001", system="cms")` |
+| ap_drg | 1,398 | DRG (4-digit) | All-patient DRGs with 4-level severity | `lookup_drg("0011", system="ap")` |
+| chronic_dx | 3,484 | DX | Chronic condition identification, comorbidity profiling | `get_chronic_dx()` |
+| category_mapping | 236 | TREND_CAT_CD + TREND_SUB_CD | Cost trend rollup to group categories | `get_category_mapping()` |
+| pot_cd | 99 | POT_LKP | Place of treatment classification | `query("SELECT * FROM pot_cd")` |
+| discharge_status | 99 | Discharge_Status_Code | Discharge disposition, readmission analysis | `query("SELECT * FROM discharge_status")` |
+| esrd_cpt | 95 | CPT | ESRD member identification | `query("SELECT * FROM esrd_cpt")` |
+| ltch | 426 | CMS_CCN | Long-term care hospital identification | `query("SELECT * FROM ltch")` |
+| clm_cat_lookups | 236 | category + code | ER/SNF/HH/IRF/Room and Board rev codes, specialty, taxonomy | `get_clm_cat_codes("ER_REV")` |

@@ -1,0 +1,9 @@
+# Default owners
+* @goldberg-consulting
+
+# Governance and distribution paths
+/.github/workflows/ @goldberg-consulting
+/install.sh @goldberg-consulting
+/install-all.sh @goldberg-consulting
+/extension/ @goldberg-consulting
+/cursor/ @goldberg-consulting

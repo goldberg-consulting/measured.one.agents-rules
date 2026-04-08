@@ -6,7 +6,7 @@ alwaysApply: false
 
 # Python Standards
 
-Target Python 3.12+. Format with `black` (line length 100). Lint with `ruff check`. Configure via `pyproject.toml`.
+Target Python 3.12+. Format with `ruff format` (line length 100). Lint with `ruff check`. Configure via `pyproject.toml`.
 
 ## Type Hints
 - All function signatures must have type hints on parameters and return types.

@@ -2,7 +2,7 @@
   "name": "cursor-agents-installer",
   "displayName": "Cursor Agents Installer",
   "description": "Install AI agents, rules, and skills into your workspace from git repositories.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "measured-one",
   "engines": {
     "vscode": "^1.85.0"
@@ -46,6 +46,19 @@
               "name": "Anthropic skills",
               "url": "https://github.com/anthropics/skills.git",
               "description": "Official Anthropic skills: PDF, DOCX, XLSX, MCP builder, webapp testing, and more"
+            },
+            {
+              "name": "Addy Osmani agent-skills",
+              "url": "https://github.com/addyosmani/agent-skills.git",
+              "description": "Production-grade engineering skills: spec, plan, build, test, review, simplify, ship"
+            },
+            {
+              "name": "Databricks AI Dev Kit",
+              "url": "https://github.com/databricks-solutions/ai-dev-kit.git",
+              "description": "20 Databricks skills: pipelines, jobs, dashboards, Unity Catalog, MLflow, model serving, Genie, apps",
+              "pathMapping": {
+                "databricks-skills": "skills"
+              }
             }
           ],
           "items": {
@@ -62,6 +75,14 @@
               "description": {
                 "type": "string",
                 "description": "Short description of what this repo contains"
+              },
+              "pathMapping": {
+                "type": "object",
+                "description": "Maps non-standard source directory names to target categories (agents, rules, skills)",
+                "additionalProperties": {
+                  "type": "string",
+                  "enum": ["agents", "rules", "skills"]
+                }
               }
             },
             "required": ["name", "url"]
@@ -73,6 +94,7 @@
   },
   "scripts": {
     "vscode:prepublish": "npm run build",
+    "prebuild": "node -e \"const fs=require('fs');const p=require('path');const src=p.resolve(__dirname,'..','cursor');const dst=p.resolve(__dirname,'cursor');fs.cpSync(src,dst,{recursive:true,force:true});\"",
     "build": "node esbuild.js --production",
     "watch": "node esbuild.js --watch",
     "lint": "tsc --noEmit",

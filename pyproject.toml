@@ -7,7 +7,7 @@ name = "measured-one-agents-rules"
 version = "0.1.0"
 description = "Shared Cursor agents, rules, skills, and clinical reference data for measured.one projects"
 readme = "README.md"
-license = {text = "MIT"}
+license = "MIT"
 requires-python = ">=3.12"
 authors = [
     {name = "Eli Goldberg"}
@@ -30,6 +30,9 @@ dev = [
 
 [project.urls]
 Repository = "https://github.com/goldberg-consulting/measured.one.agents-rules"
+
+[tool.setuptools]
+packages = ["ReferenceData"]
 
 [tool.ruff]
 line-length = 100

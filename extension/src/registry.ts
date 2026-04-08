@@ -4,6 +4,7 @@ export interface RepoEntry {
   name: string;
   url: string;
   description?: string;
+  pathMapping?: Record<string, string>;
 }
 
 const CONFIG_KEY = "cursorAgents.repositories";

@@ -64,6 +64,7 @@ async function installFromRepoCommand(): Promise<void> {
   }
 
   let url: string;
+  let pathMapping: Record<string, string> | undefined;
   if (selected.label.includes("Enter a custom URL")) {
     const input = await vscode.window.showInputBox({
       prompt: "Git repository URL (HTTPS or SSH)",
@@ -77,6 +78,8 @@ async function installFromRepoCommand(): Promise<void> {
     url = input.trim();
   } else {
     url = selected.description!;
+    const repo = repos.find((r) => r.url === url);
+    pathMapping = repo?.pathMapping;
   }
 
   await vscode.window.withProgress(
@@ -93,7 +96,8 @@ async function installFromRepoCommand(): Promise<void> {
           tmpDir,
           workspaceRoot,
           "overwrite",
-          progress
+          progress,
+          pathMapping
         );
         vscode.window.showInformationMessage(formatResult(result));
       } catch (err: unknown) {
@@ -117,7 +121,7 @@ async function installScaffoldingCommand(): Promise<void> {
     return;
   }
 
-  const scaffoldDir = path.resolve(__dirname, "..", "..", "cursor");
+  const scaffoldDir = path.resolve(__dirname, "..", "cursor");
   await vscode.window.withProgress(
     {
       location: vscode.ProgressLocation.Notification,
@@ -126,8 +130,8 @@ async function installScaffoldingCommand(): Promise<void> {
     },
     async (progress) => {
       try {
-        // The scaffolding dir is the `cursor/` folder at the repo root.
-        // We wrap it in a parent so discoverFiles finds `cursor/` inside.
+        // The cursor/ folder is bundled inside the extension package.
+        // We point at its parent so discoverFiles finds `cursor/` inside.
         const parentDir = path.resolve(scaffoldDir, "..");
         const result = await installFromDirectory(
           parentDir,
@@ -176,6 +180,8 @@ async function updateFromRepoCommand(): Promise<void> {
   }
 
   const url = selected.description!;
+  const repo = repos.find((r) => r.url === url);
+  const pathMapping = repo?.pathMapping;
 
   await vscode.window.withProgress(
     {
@@ -191,7 +197,8 @@ async function updateFromRepoCommand(): Promise<void> {
           tmpDir,
           workspaceRoot,
           "overwriteAll",
-          progress
+          progress,
+          pathMapping
         );
         const msg = formatResult(result);
         vscode.window.showInformationMessage(`Updated: ${msg}`);

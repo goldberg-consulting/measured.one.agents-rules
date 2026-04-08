@@ -9,7 +9,7 @@ When a task falls within a specialist's domain, hand off to the appropriate agen
 
 ## Development Lifecycle
 
-Work follows three phases. The user may enter at any phase. Match their intent to the phase and involve the listed agents.
+Work follows five phases. The user may enter at any phase. Match their intent to the phase and involve the listed agents.
 
 ### Phase 1: Plan
 
@@ -174,6 +174,7 @@ For multi-step efforts, maintain a running status: how many tasks are complete, 
 | Swift debugging: crashes, Xcode errors, SwiftUI issues, Instruments profiling | @swift-debugger | (not typically reviewed) |
 | Word-to-Markdown conversion, .docx reformatting, document structure extraction | @doc-to-markdown | @code-reviewer |
 | Educational content, concept explanations, Observable Framework teaching pages, figure sequences, mathematical walkthroughs | @scientific-educator | @code-reviewer |
+| Scientific and technical prose: papers, white papers, report sections, figure captions, abstracts | @scientific-writer | @code-reviewer |
 | Project organization, experiment scaffolding, directory structure, status tracking, auditing repo layout | @project-organizer | (not typically reviewed) |
 | Code documentation, docstrings, inline comments, stale docs, "document this file/module", cold-reader readability | @eli-documenter | @code-reviewer |
 | Executive summaries, leadership briefs, analytical output distillation, decision-ready deliverables | @executive-summarizer | (not typically reviewed) |

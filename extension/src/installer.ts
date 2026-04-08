@@ -18,13 +18,13 @@ export interface InstallResult {
   skipped: string[];
 }
 
+export interface FileEntry {
+  src: string;
+  destRel: string;
+}
+
 const CURSOR_DIRS = ["agents", "rules", "skills"] as const;
 
-/**
- * Locate the cursor content root inside a cloned repo.
- * Checks for `cursor/` first (this repo's convention), then falls back
- * to top-level `agents/` / `rules/` / `skills/` directories.
- */
 async function findCursorRoot(repoDir: string): Promise<string | null> {
   const cursorSub = path.join(repoDir, "cursor");
   try {
@@ -86,24 +86,49 @@ export async function cloneRepo(
 }
 
 export async function discoverFiles(
-  repoDir: string
-): Promise<Map<string, string[]>> {
-  const root = await findCursorRoot(repoDir);
-  if (!root) {
-    throw new Error(
-      "No cursor content found. Expected a cursor/ directory or top-level agents/, rules/, skills/ folders."
-    );
+  repoDir: string,
+  pathMapping?: Record<string, string>
+): Promise<Map<string, FileEntry[]>> {
+  const found = new Map<string, FileEntry[]>();
+
+  if (pathMapping) {
+    for (const [sourceDir, targetCategory] of Object.entries(pathMapping)) {
+      if (!(CURSOR_DIRS as readonly string[]).includes(targetCategory)) {
+        continue;
+      }
+      const absSource = path.join(repoDir, sourceDir);
+      const files = await collectFiles(absSource);
+      if (files.length > 0) {
+        const existing = found.get(targetCategory) ?? [];
+        const entries: FileEntry[] = files.map((f) => ({
+          src: f,
+          destRel: path.join(targetCategory, path.relative(absSource, f)),
+        }));
+        found.set(targetCategory, [...existing, ...entries]);
+      }
+    }
   }
 
-  const found = new Map<string, string[]>();
-  for (const category of CURSOR_DIRS) {
-    const categoryDir = path.join(root, category);
-    const files = await collectFiles(categoryDir);
-    if (files.length > 0) {
-      found.set(
-        category,
-        files.map((f) => path.relative(root, f))
+  if (found.size === 0) {
+    const root = await findCursorRoot(repoDir);
+    if (!root) {
+      throw new Error(
+        "No cursor content found. Expected a cursor/ directory or top-level agents/, rules/, skills/ folders."
       );
+    }
+
+    for (const category of CURSOR_DIRS) {
+      const categoryDir = path.join(root, category);
+      const files = await collectFiles(categoryDir);
+      if (files.length > 0) {
+        found.set(
+          category,
+          files.map((f) => ({
+            src: f,
+            destRel: path.relative(root, f),
+          }))
+        );
+      }
     }
   }
 
@@ -119,30 +144,23 @@ export async function discoverFiles(
 export type ConflictStrategy = "overwrite" | "skip" | "overwriteAll";
 
 export async function installFiles(
-  sourceRoot: string,
   workspaceRoot: string,
-  filesByCategory: Map<string, string[]>,
+  filesByCategory: Map<string, FileEntry[]>,
   conflictStrategy: ConflictStrategy,
   progress: vscode.Progress<{ message?: string; increment?: number }>
 ): Promise<InstallResult> {
-  const cursorRoot = await findCursorRoot(sourceRoot);
-  if (!cursorRoot) {
-    throw new Error("Source root lost during install.");
-  }
-
   const dotCursor = path.join(workspaceRoot, ".cursor");
   const result: InstallResult = { files: [], skipped: [] };
-  const allFiles = [...filesByCategory.entries()].flatMap(([, files]) => files);
+  const allFiles = [...filesByCategory.values()].flat();
   const increment = allFiles.length > 0 ? 80 / allFiles.length : 0;
   let strategy = conflictStrategy;
 
-  for (const [category, files] of filesByCategory.entries()) {
-    for (const relPath of files) {
-      const src = path.join(cursorRoot, relPath);
-      const dest = path.join(dotCursor, relPath);
+  for (const [category, entries] of filesByCategory.entries()) {
+    for (const { src, destRel } of entries) {
+      const dest = path.join(dotCursor, destRel);
 
       progress.report({
-        message: `Installing ${relPath}`,
+        message: `Installing ${destRel}`,
         increment,
       });
 
@@ -153,12 +171,12 @@ export async function installFiles(
 
       if (destExists && strategy !== "overwriteAll") {
         if (strategy === "skip") {
-          result.skipped.push(relPath);
+          result.skipped.push(destRel);
           continue;
         }
 
         const choice = await vscode.window.showWarningMessage(
-          `${relPath} already exists. Overwrite?`,
+          `${destRel} already exists. Overwrite?`,
           "Overwrite",
           "Skip",
           "Overwrite All",
@@ -166,19 +184,19 @@ export async function installFiles(
         );
 
         if (choice === "Skip") {
-          result.skipped.push(relPath);
+          result.skipped.push(destRel);
           continue;
         }
         if (choice === "Skip All") {
           strategy = "skip";
-          result.skipped.push(relPath);
+          result.skipped.push(destRel);
           continue;
         }
         if (choice === "Overwrite All") {
           strategy = "overwriteAll";
         }
         if (!choice) {
-          result.skipped.push(relPath);
+          result.skipped.push(destRel);
           continue;
         }
       }
@@ -186,7 +204,7 @@ export async function installFiles(
       await fs.mkdir(path.dirname(dest), { recursive: true });
       await fs.copyFile(src, dest);
       result.files.push({
-        relativePath: relPath,
+        relativePath: destRel,
         category: category as InstalledFile["category"],
         overwritten: destExists,
       });
@@ -200,17 +218,12 @@ export async function installFromDirectory(
   sourceDir: string,
   workspaceRoot: string,
   conflictStrategy: ConflictStrategy,
-  progress: vscode.Progress<{ message?: string; increment?: number }>
+  progress: vscode.Progress<{ message?: string; increment?: number }>,
+  pathMapping?: Record<string, string>
 ): Promise<InstallResult> {
   progress.report({ message: "Scanning for agents, rules, and skills..." });
-  const filesByCategory = await discoverFiles(sourceDir);
-  return installFiles(
-    sourceDir,
-    workspaceRoot,
-    filesByCategory,
-    conflictStrategy,
-    progress
-  );
+  const filesByCategory = await discoverFiles(sourceDir, pathMapping);
+  return installFiles(workspaceRoot, filesByCategory, conflictStrategy, progress);
 }
 
 export async function cleanup(tmpDir: string): Promise<void> {

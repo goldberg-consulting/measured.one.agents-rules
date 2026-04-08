@@ -1,0 +1,81 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-publish:
+    name: Build VSIX and update Homebrew tap
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: extension
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build VSIX
+        run: npx @vscode/vsce package --no-dependencies -o ../measured-one-agents-rules-${{ github.event.release.tag_name }}.vsix
+        env:
+          VSCE_PAT: ''
+
+      - name: Extract version
+        id: version
+        working-directory: .
+        run: |
+          VERSION="${{ github.event.release.tag_name }}"
+          VERSION="${VERSION#v}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Upload VSIX to release
+        working-directory: .
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ARTIFACT="measured-one-agents-rules-${{ steps.version.outputs.version }}.vsix"
+          gh release upload "${{ github.event.release.tag_name }}" "$ARTIFACT" --clobber
+
+      - name: Compute SHA256
+        id: sha
+        working-directory: .
+        run: |
+          ARTIFACT="measured-one-agents-rules-${{ steps.version.outputs.version }}.vsix"
+          SHA=$(shasum -a 256 "$ARTIFACT" | awk '{print $1}')
+          echo "sha256=$SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Update Homebrew tap
+        working-directory: .
+        env:
+          TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          if [ -z "$TAP_TOKEN" ]; then
+            echo "HOMEBREW_TAP_TOKEN not set; skipping tap update."
+            exit 0
+          fi
+
+          VERSION="${{ steps.version.outputs.version }}"
+          SHA="${{ steps.sha.outputs.sha256 }}"
+
+          git clone "https://x-access-token:${TAP_TOKEN}@github.com/goldberg-consulting/homebrew-tap.git" /tmp/tap
+          cd /tmp/tap
+
+          CASK="Casks/measured-one-agents-rules.rb"
+          sed -i "s/version \".*\"/version \"${VERSION}\"/" "$CASK"
+          sed -i "s/sha256 \".*\"/sha256 \"${SHA}\"/" "$CASK"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add "$CASK"
+          git diff --cached --quiet && echo "No changes" && exit 0
+          git commit -m "bump measured-one-agents-rules to ${VERSION}"
+          git push origin main

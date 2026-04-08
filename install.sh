@@ -1,30 +1,35 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Install Cursor agents, rules, and reference database into a project.
+# Install Cursor agents, rules, skills, and reference database into a project.
 #
 # Usage: ./install.sh [target-project-path]
 #   Defaults to current directory if no path given.
 #
 # Environment:
-#   REFERENCE_DB_REPO  Path to the reference database build repo (default: ~/reference-db-builder)
+#   REFERENCE_DB_REPO  Path to the reference database build repo
+#                      (default: ~/reference-db-builder)
+#   CODE_LOOK_ME_UP    Legacy alias for REFERENCE_DB_REPO
 #   REBUILD_DB         Set to "1" to force rebuild the reference database
 
 TARGET="${1:-.}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-REFERENCE_DB_REPO="${REFERENCE_DB_REPO:-$HOME/reference-db-builder}"
+REFERENCE_DB_REPO="${REFERENCE_DB_REPO:-${CODE_LOOK_ME_UP:-$HOME/reference-db-builder}}"
 
-# --- Agents and rules ---
+# --- Agents, rules, and skills ---
 mkdir -p "$TARGET/.cursor"
 cp -r "$SCRIPT_DIR/cursor/agents" "$TARGET/.cursor/"
 cp -r "$SCRIPT_DIR/cursor/rules" "$TARGET/.cursor/"
+cp -r "$SCRIPT_DIR/cursor/skills" "$TARGET/.cursor/"
 
-echo "Installed agents and rules to $TARGET/.cursor/"
+echo "Installed agents, rules, and skills to $TARGET/.cursor/"
 echo "  agents: $(ls "$TARGET/.cursor/agents/" | wc -l | tr -d ' ') files"
 echo "  rules:  $(ls "$TARGET/.cursor/rules/" | wc -l | tr -d ' ') files"
+echo "  skills: $(ls "$TARGET/.cursor/skills/" | wc -l | tr -d ' ') directories"
 
 # --- Reference database ---
 DB_SOURCE="$REFERENCE_DB_REPO/src/reference.duckdb"
+mkdir -p "$TARGET/ReferenceData"
 
 if [ ! -d "$REFERENCE_DB_REPO" ]; then
     echo ""
@@ -38,9 +43,6 @@ else
         echo "Building reference database from source files..."
         (cd "$REFERENCE_DB_REPO/src" && python3 build_reference_db.py)
     fi
-
-    # Copy database and access module to target
-    mkdir -p "$TARGET/ReferenceData"
 
     DB_TARGET="$TARGET/ReferenceData/reference.duckdb"
     # Remove stale symlinks or old copies

@@ -57,7 +57,7 @@ pre-commit install       # installs hooks into .git/hooks
 | `trailing-whitespace` | Strip trailing whitespace |
 | `end-of-file-fixer` | Ensure files end with newline |
 | `check-yaml`, `check-json` | Syntax validation |
-| `check-added-large-files` | Block files > 1MB |
+| `check-added-large-files` | Block files > 500KB |
 | `check-merge-conflict` | Catch unresolved conflict markers |
 | `detect-private-key` | Block private key files |
 | `no-commit-to-branch` | Block direct commits to `main` |
@@ -65,8 +65,6 @@ pre-commit install       # installs hooks into .git/hooks
 | `ruff-format` | Python formatting (replaces black) |
 | `mypy` | Type checking |
 | `detect-secrets` | Secrets scanning against baseline |
-| `markdownlint` | Markdown formatting |
-| `sqlfluff-lint` | SQL linting (manual stage, run explicitly) |
 
 ### Enforcement
 
@@ -87,7 +85,7 @@ Ruff config lives in `pyproject.toml` under `[tool.ruff]`. Key rules enabled:
 - **S**: bandit (security)
 - **SIM**: flake8-simplify
 
-Line length is 88. The formatter handles wrapping; do not manually break lines to satisfy E501.
+Line length is 100. The formatter handles wrapping; do not manually break lines to satisfy E501.
 
 ## Branch Names
 

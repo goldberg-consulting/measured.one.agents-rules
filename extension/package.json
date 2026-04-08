@@ -2,7 +2,7 @@
   "name": "cursor-agents-installer",
   "displayName": "Cursor Agents Installer",
   "description": "Install AI agents, rules, and skills into your workspace from git repositories.",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "publisher": "measured-one",
   "engines": {
     "vscode": "^1.85.0"
